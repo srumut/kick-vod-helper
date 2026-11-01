@@ -11,6 +11,9 @@
   const QUALITY_RETRY_LIMIT = 30;
   const VOLUME_RESTORE_RETRY_MS = 400;
   const VOLUME_RESTORE_RETRY_COUNT = 6;
+  // One pass runs when the saved volume is loaded; a second may run when the
+  // player starts playing, because Kick often finishes initialising then.
+  const VOLUME_RESTORE_PASSES = 2;
 
   let active = null;
   let pageVodId = null;
@@ -33,6 +36,10 @@
 
   function volumeKey(id) {
     return `${VOLUME_PREFIX}${id}`;
+  }
+
+  function clampVolume(value) {
+    return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 1));
   }
 
   function removeSavedPosition(id) {
@@ -134,30 +141,29 @@
     }
   }
 
+  // Largest visible video (ties go to the first in document order), else the first video.
   function findMainVideo() {
-    const videos = [...document.querySelectorAll("video")];
-    if (videos.length === 0) return null;
-
-    const visibleVideos = videos
-      .map(video => {
-        const rect = video.getBoundingClientRect();
-        const visible = rect.width > 100 && rect.height > 70 &&
-          getComputedStyle(video).visibility !== "hidden";
-        return { video, area: rect.width * rect.height, visible };
-      })
-      .filter(item => item.visible)
-      .sort((a, b) => b.area - a.area);
-
-    return visibleVideos[0]?.video ?? videos[0];
+    const videos = document.querySelectorAll("video");
+    let best = null;
+    let bestArea = 0;
+    for (const video of videos) {
+      const rect = video.getBoundingClientRect();
+      if (rect.width > 100 && rect.height > 70 &&
+          getComputedStyle(video).visibility !== "hidden") {
+        const area = rect.width * rect.height;
+        if (best === null || area > bestArea) {
+          best = video;
+          bestArea = area;
+        }
+      }
+    }
+    return best ?? videos[0] ?? null;
   }
 
   // ---------------------------- Volume memory ----------------------------
 
   function readVolumeState(video) {
-    return {
-      volume: Math.min(1, Math.max(0, Number.isFinite(video.volume) ? video.volume : 1)),
-      muted: Boolean(video.muted)
-    };
+    return { volume: clampVolume(video.volume), muted: Boolean(video.muted) };
   }
 
   function queueVolumeSave(context, state) {
@@ -165,10 +171,14 @@
 
     const key = volumeKey(context.id);
     const snapshot = {
-      volume: Math.min(1, Math.max(0, Number.isFinite(state.volume) ? state.volume : 1)),
+      volume: clampVolume(state.volume),
       muted: Boolean(state.muted),
       updatedAt: Date.now()
     };
+
+    // Keep the in-memory preference current. Restore passes apply this value,
+    // so a stale copy would put an old volume back over the viewer's choice.
+    context.volumePreference = { volume: snapshot.volume, muted: snapshot.muted };
 
     // Keep volume writes independent from quality writes. This prevents a
     // rapid sequence of player events from replacing one another's settings.
@@ -184,16 +194,13 @@
     if (context.volumeRestorePending) return;
 
     const current = readVolumeState(context.video);
-    if (!force && Date.now() < (context.suppressVolumeEventsUntil || 0)) {
-      context.lastVolumeState = current;
-      return;
-    }
-
     const previous = context.lastVolumeState;
     const changed = force || !previous ||
       Math.abs(previous.volume - current.volume) > 0.001 ||
       previous.muted !== current.muted;
 
+    // Our own writes are echoed back as volumechange events. applyVolumePreference
+    // records the applied value first, so those echoes compare equal and are not saved.
     context.lastVolumeState = current;
     if (changed) queueVolumeSave(context, current);
   }
@@ -201,13 +208,9 @@
   function applyVolumePreference(context) {
     if (!context || active !== context || !context.volumeLoaded) return false;
 
-    const preference = context.volumePreference || { volume: 1, muted: false };
-    const volume = Math.min(1, Math.max(0,
-      Number.isFinite(preference.volume) ? preference.volume : 1));
-    const muted = Boolean(preference.muted);
+    const { volume, muted } = context.volumePreference;
 
     try {
-      context.suppressVolumeEventsUntil = Date.now() + 250;
       if (Math.abs(context.video.volume - volume) > 0.001) context.video.volume = volume;
       if (context.video.muted !== muted) context.video.muted = muted;
       context.lastVolumeState = readVolumeState(context.video);
@@ -231,20 +234,20 @@
 
     // Persist the preference, not a temporary value Kick may have applied
     // while mounting the player.
-    queueVolumeSave(context, context.volumePreference || { volume: 1, muted: false });
+    queueVolumeSave(context, context.volumePreference);
   }
 
-  function maybeRestoreVolumeSettings(context) {
-    if (!context || active !== context || !context.volumeLoaded || context.volumeRestoreStarted) return;
-    if (context.video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+  function startVolumeRestore(context) {
+    if (!context || active !== context || !context.volumeLoaded) return;
+    if (context.volumeRestorePending || context.volumeRestorePasses >= VOLUME_RESTORE_PASSES) return;
 
-    context.volumeRestoreStarted = true;
+    context.volumeRestorePasses += 1;
     context.volumeRestorePending = true;
     context.volumeRestoreTimers = [];
 
-    // Kick can initialize its internal player state after the media element
-    // becomes ready. Re-apply a few times during that short initialization
-    // window; after that, normal user changes are saved immediately.
+    // Apply right away, even while the video is still at HAVE_METADATA (a paused
+    // VOD). Kick can initialize its internal player state after that, so
+    // re-apply a few times; after that, normal user changes are saved immediately.
     const restoreAttempt = attempt => {
       if (active !== context || getVodId() !== context.id || !context.volumeRestorePending) return;
       applyVolumePreference(context);
@@ -291,10 +294,7 @@
   document.addEventListener("pointerdown", noteVolumeInteraction, true);
 
   async function restorePlayerSettings(context) {
-    if (context.settingsLoadStarted) {
-      maybeRestoreVolumeSettings(context);
-      return;
-    }
+    if (context.settingsLoadStarted) return;
     context.settingsLoadStarted = true;
 
     try {
@@ -316,24 +316,21 @@
         ? savedVolume
         : legacyVolume;
       context.volumePreference = {
-        volume: Number.isFinite(candidate.volume)
-          ? Math.min(1, Math.max(0, candidate.volume))
-          : 1,
+        volume: clampVolume(candidate.volume),
         muted: typeof candidate.muted === "boolean" ? candidate.muted : false
       };
       context.volumeLoaded = true;
       console.info("[Kick VOD Resume] Volume preference loaded", context.id, context.volumePreference);
 
-      maybeRestoreVolumeSettings(context);
+      startVolumeRestore(context);
       startQualityRestore(context);
     } catch (error) {
       if (active !== context) return;
       console.warn("[Kick VOD Resume] Could not load player settings:", error);
       context.settings = {};
       context.settingsLoaded = true;
-      context.volumePreference = { volume: 1, muted: false };
-      context.volumeLoaded = true;
-      maybeRestoreVolumeSettings(context);
+      // The saved volume is unknown, so restore nothing and save nothing for this
+      // VOD. Writing a default now would overwrite the viewer's real saved value.
       startQualityRestore(context);
     }
   }
@@ -378,18 +375,17 @@
   function chooseQuality(items, preferredKey) {
     if (!items.length) return null;
 
-    const available = items;
     const preferred = typeof preferredKey === "string" ? preferredKey.toLowerCase() : "";
 
     if (preferred) {
-      const exact = available.find(item => item.quality.key.toLowerCase() === preferred);
+      const exact = items.find(item => item.quality.key.toLowerCase() === preferred);
       if (exact) return exact;
 
       const preferredMatch = preferred.match(/^(\d{3,4})p(\d{0,3})$/);
       if (preferredMatch) {
         const wantedHeight = Number.parseInt(preferredMatch[1], 10);
         const wantedFps = Number.parseInt(preferredMatch[2] || "0", 10);
-        const fixed = available.filter(item => item.quality.mode === "resolution");
+        const fixed = items.filter(item => item.quality.mode === "resolution");
         const belowOrEqual = fixed.filter(item => item.quality.height <= wantedHeight)
           .sort((a, b) => (b.quality.height - a.quality.height) ||
             (Math.abs(a.quality.fps - wantedFps) - Math.abs(b.quality.fps - wantedFps)));
@@ -403,16 +399,16 @@
       // If a saved preference is no longer available, fall back to the best option.
     }
 
-    const source = available.find(item => item.quality.mode === "source");
+    const source = items.find(item => item.quality.mode === "source");
     if (source) return source;
 
-    const resolutions = available
+    const resolutions = items
       .filter(item => item.quality.mode === "resolution")
       .sort((a, b) => (b.quality.height - a.quality.height) ||
         (b.quality.fps - a.quality.fps));
     if (resolutions.length) return resolutions[0];
 
-    return available.find(item => item.quality.mode === "auto") || null;
+    return items.find(item => item.quality.mode === "auto") || null;
   }
 
   function playerSettingsButton(video) {
@@ -424,24 +420,25 @@
         return bounds.width > 0 && bounds.height > 0;
       });
 
-    const distanceFromPlayer = button => {
+    const distance = new Map(candidates.map(button => {
       const bounds = button.getBoundingClientRect();
-      return Math.hypot(
+      return [button, Math.hypot(
         rect.right - (bounds.left + bounds.width / 2),
         rect.bottom - (bounds.top + bounds.height / 2)
-      );
-    };
+      )];
+    }));
+    const byDistance = (a, b) => distance.get(a) - distance.get(b);
 
     const labelled = candidates.filter(button => {
       const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("title") || ""}`;
       return /settings|quality/i.test(label);
-    }).sort((a, b) => distanceFromPlayer(a) - distanceFromPlayer(b));
+    }).sort(byDistance);
     if (labelled.length) return labelled[0];
 
     // Current Kick desktop player: settings is a menu button near the video.
     const desktopCandidates = candidates.filter(button => button.matches('button[aria-haspopup="menu"]'));
     if (desktopCandidates.length) {
-      desktopCandidates.sort((a, b) => distanceFromPlayer(a) - distanceFromPlayer(b));
+      desktopCandidates.sort(byDistance);
       return desktopCandidates[0];
     }
 
@@ -544,7 +541,6 @@
 
       if (attempts >= QUALITY_RETRY_LIMIT) {
         if (openedByUs) closeQualityMenu();
-        context.qualityRestoreFinished = true;
         return;
       }
       window.setTimeout(tick, QUALITY_RETRY_MS);
@@ -567,15 +563,23 @@
     }
   }, true);
 
+  // Save whatever the active VOD has not saved yet (used when leaving it or the page).
+  function flushActive() {
+    if (!active) return;
+    rememberCurrentVolume(active, true);
+    savePosition(active, true, true);
+  }
+
+  function releaseActive() {
+    if (!active) return;
+    flushActive();
+    window.clearInterval(active.volumePoll);
+    for (const timer of active.volumeRestoreTimers || []) window.clearTimeout(timer);
+  }
+
   function bindVideo(video, id) {
     if (active?.id === id && active.video === video) return;
-
-    if (active) {
-      rememberCurrentVolume(active, true);
-      savePosition(active, true, true);
-      if (active.volumePoll) window.clearInterval(active.volumePoll);
-      for (const timer of active.volumeRestoreTimers || []) window.clearTimeout(timer);
-    }
+    releaseActive();
 
     const context = {
       id,
@@ -589,10 +593,8 @@
       settingsWrite: Promise.resolve(),
       qualityRestoreStarted: false,
       qualityApplied: false,
-      qualityRestoreFinished: false,
-      suppressVolumeEventsUntil: 0,
       lastVolumeState: readVolumeState(video),
-      volumeRestoreStarted: false,
+      volumeRestorePasses: 0,
       volumeRestorePending: false,
       volumeLoaded: false,
       volumePreference: { volume: 1, muted: false },
@@ -605,18 +607,16 @@
     video.addEventListener("loadedmetadata", () => {
       restorePosition(context);
       restorePlayerSettings(context);
-      maybeRestoreVolumeSettings(context);
     });
     video.addEventListener("durationchange", () => {
       restorePosition(context);
       restorePlayerSettings(context);
-      maybeRestoreVolumeSettings(context);
     });
     video.addEventListener("canplay", () => {
       restorePlayerSettings(context);
-      maybeRestoreVolumeSettings(context);
+      startVolumeRestore(context);
     });
-    video.addEventListener("playing", () => maybeRestoreVolumeSettings(context));
+    video.addEventListener("playing", () => startVolumeRestore(context));
     video.addEventListener("volumechange", () => rememberCurrentVolume(context));
     video.addEventListener("timeupdate", () => {
       rememberCurrentVolume(context);
@@ -646,12 +646,7 @@
     const id = getVodId();
 
     if (id !== pageVodId) {
-      if (active) {
-        rememberCurrentVolume(active, true);
-        savePosition(active, true, true);
-        if (active.volumePoll) window.clearInterval(active.volumePoll);
-        for (const timer of active.volumeRestoreTimers || []) window.clearTimeout(timer);
-      }
+      releaseActive();
       active = null;
       pageVodId = id;
       // Give Kick's SPA player a moment to switch sources after navigation.
@@ -664,24 +659,24 @@
     if (video) bindVideo(video, id);
   }
 
-  const observer = new MutationObserver(scanPage);
+  // Chat and other page churn produce constant DOM mutations. Only a <video>
+  // being added or removed, or a URL change, can change which VOD is bound;
+  // the one-second poll below covers the rest, so other mutations are skipped.
+  const touchesVideo = mutation => [...mutation.addedNodes, ...mutation.removedNodes].some(node =>
+    node instanceof Element && (node.tagName === "VIDEO" || node.querySelector("video") !== null)
+  );
+  const observer = new MutationObserver(mutations => {
+    if (getVodId() !== pageVodId || mutations.some(touchesVideo)) scanPage();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   // Kick is a single-page app, so also check for URL changes that don't replace the page.
   window.setInterval(scanPage, 1_000);
 
-  window.addEventListener("pagehide", () => {
-    if (active) {
-      rememberCurrentVolume(active, true);
-      savePosition(active, true, true);
-    }
-  });
+  window.addEventListener("pagehide", flushActive);
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden" && active) {
-      rememberCurrentVolume(active, true);
-      savePosition(active, true, true);
-    }
+    if (document.visibilityState === "hidden") flushActive();
   });
 
   scanPage();

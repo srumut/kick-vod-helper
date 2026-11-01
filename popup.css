@@ -180,6 +180,7 @@ input[type="checkbox"] {
   font-size: 9px;
 }
 .privacy-dot { width: 6px; height: 6px; border-radius: 50%; background: #53c58b; }
+.app-version { margin: 6px 0 0; text-align: center; color: #575c66; font-size: 9px; font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: no-preference) {
   button, .video-card, .video-title { transition: background .15s ease, border-color .15s ease, color .15s ease; }

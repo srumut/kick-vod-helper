@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kick VOD Resume",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Remembers Kick VOD playback position, per-VOD volume and quality, with a local progress manager.",
   "permissions": [
     "storage"

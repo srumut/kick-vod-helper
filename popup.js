@@ -10,6 +10,10 @@
   const itemCount = document.getElementById("itemCount");
   const refreshButton = document.getElementById("refreshButton");
 
+  const dateFormatter = new Intl.DateTimeFormat(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+  });
+
   let entries = [];
   const selected = new Set();
 
@@ -52,9 +56,7 @@
 
   function formatDate(timestamp) {
     if (!Number.isFinite(timestamp) || timestamp <= 0) return "Saved progress";
-    return `Watched ${new Intl.DateTimeFormat(undefined, {
-      month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
-    }).format(new Date(timestamp))}`;
+    return `Watched ${dateFormatter.format(new Date(timestamp))}`;
   }
 
   function makeSvg(pathMarkup) {
@@ -68,6 +70,7 @@
     const time = Number.isFinite(saved.time) && saved.time >= 0 ? saved.time : 0;
     const percent = duration > 0 ? Math.min(100, Math.max(0, time / duration * 100)) : 0;
     const url = getVideoUrl(id, saved);
+    const title = getTitle(id, saved);
 
     const card = document.createElement("article");
     card.className = `video-card${selected.has(id) ? " selected" : ""}`;
@@ -78,7 +81,7 @@
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = selected.has(id);
-    checkbox.setAttribute("aria-label", `Select ${getTitle(id, saved)}`);
+    checkbox.setAttribute("aria-label", `Select ${title}`);
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) selected.add(id);
       else selected.delete(id);
@@ -89,13 +92,13 @@
     const main = document.createElement("div");
     main.className = "card-main";
 
-    const title = document.createElement("a");
-    title.className = "video-title";
-    title.href = url;
-    title.target = "_blank";
-    title.rel = "noopener noreferrer";
-    title.title = getTitle(id, saved);
-    title.textContent = getTitle(id, saved);
+    const link = document.createElement("a");
+    link.className = "video-title";
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.title = title;
+    link.textContent = title;
 
     const meta = document.createElement("div");
     meta.className = "video-meta";
@@ -117,7 +120,7 @@
     fill.style.width = `${percent}%`;
     track.append(fill);
 
-    main.append(title, meta, track);
+    main.append(link, meta, track);
 
     const side = document.createElement("div");
     side.className = "card-side";
@@ -208,6 +211,8 @@
   });
 
   refreshButton.addEventListener("click", loadEntries);
+
+  document.getElementById("appVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
