@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Kick VOD Resume",
+  "version": "1.0.0",
+  "description": "Remembers your playback position on Kick VODs and resumes when you return.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://kick.com/*",
+        "https://www.kick.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
