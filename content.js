@@ -146,10 +146,43 @@
 
   // ---------------------------- Volume memory ----------------------------
 
-  function applyVolumeSettings(context) {
-    if (!context || active !== context || !context.settingsLoaded) return;
+  function readVolumeState(video) {
+    return {
+      volume: Math.min(1, Math.max(0, Number.isFinite(video.volume) ? video.volume : 1)),
+      muted: Boolean(video.muted)
+    };
+  }
 
-    const video = context.video;
+  function rememberCurrentVolume(context, force = false) {
+    if (!context || active !== context || !context.settingsLoaded) return;
+    // Do not record the temporary default values while Kick is still mounting
+    // its player and the saved preference is being restored.
+    if (context.volumeRestorePending) return;
+
+    const current = readVolumeState(context.video);
+
+    // Assigning video.volume/video.muted raises volumechange too. Ignore those
+    // events briefly after applying a saved value, but keep the observed state
+    // in sync so the polling fallback does not mistake it for a user change.
+    if (!force && Date.now() < (context.suppressVolumeEventsUntil || 0)) {
+      context.lastVolumeState = current;
+      return;
+    }
+
+    const previous = context.lastVolumeState;
+    const changed = force || !previous ||
+      Math.abs(previous.volume - current.volume) > 0.001 ||
+      previous.muted !== current.muted;
+
+    context.lastVolumeState = current;
+    if (!changed) return;
+
+    updateSettings(context, current);
+  }
+
+  function applyVolumeSettings(context) {
+    if (!context || active !== context || !context.settingsLoaded) return false;
+
     const storedVolume = context.settings.volume;
     const volume = Number.isFinite(storedVolume)
       ? Math.min(1, Math.max(0, storedVolume))
@@ -159,28 +192,46 @@
       : false;
 
     try {
-      context.suppressVolumeEventsUntil = Date.now() + 500;
-      if (Math.abs(video.volume - volume) > 0.001) video.volume = volume;
-      if (video.muted !== muted) video.muted = muted;
+      // Kick may update the media element as the player finishes mounting.
+      // Applying after metadata/canplay and polling below handles either order.
+      context.suppressVolumeEventsUntil = Date.now() + 350;
+      if (Math.abs(context.video.volume - volume) > 0.001) context.video.volume = volume;
+      if (context.video.muted !== muted) context.video.muted = muted;
+      context.lastVolumeState = readVolumeState(context.video);
       updateSettings(context, { volume, muted });
+      return true;
     } catch {
       // Some media implementations may reject volume changes; playback is unaffected.
+      return false;
     }
   }
 
-  document.addEventListener("volumechange", event => {
-    const context = active;
-    if (!context || event.target !== context.video || !context.settingsLoaded) return;
-    if (Date.now() < (context.suppressVolumeEventsUntil || 0)) return;
+  function maybeRestoreVolumeSettings(context) {
+    if (!context || active !== context || !context.settingsLoaded || context.volumeRestoreStarted) return;
+    // Wait until Kick has a playable media element. Applying too early can be
+    // overwritten by the player's own initialization a moment later.
+    if (context.video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
 
-    updateSettings(context, {
-      volume: Math.min(1, Math.max(0, context.video.volume)),
-      muted: Boolean(context.video.muted)
-    });
-  }, true);
+    context.volumeRestoreStarted = true;
+    context.volumeRestorePending = true;
+    applyVolumeSettings(context);
+
+    // Kick may write its initial player state after canplay. Re-apply once
+    // after that initialization settles, then begin watching for user changes.
+    context.volumeRestoreTimer = window.setTimeout(() => {
+      if (active !== context || getVodId() !== context.id) return;
+      applyVolumeSettings(context);
+      context.lastVolumeState = readVolumeState(context.video);
+      context.volumeRestorePending = false;
+      context.volumeRestoreTimer = null;
+    }, 700);
+  }
 
   async function restorePlayerSettings(context) {
-    if (context.settingsLoadStarted) return;
+    if (context.settingsLoadStarted) {
+      maybeRestoreVolumeSettings(context);
+      return;
+    }
     context.settingsLoadStarted = true;
 
     try {
@@ -193,14 +244,14 @@
       context.settingsLoaded = true;
 
       // A VOD with no saved preference starts at full volume and unmuted.
-      applyVolumeSettings(context);
+      maybeRestoreVolumeSettings(context);
       startQualityRestore(context);
     } catch {
       // Keep playback usable if extension storage is unavailable.
       if (active !== context) return;
       context.settings = { volume: 1, muted: false };
       context.settingsLoaded = true;
-      applyVolumeSettings(context);
+      maybeRestoreVolumeSettings(context);
       startQualityRestore(context);
     }
   }
@@ -437,7 +488,12 @@
   function bindVideo(video, id) {
     if (active?.id === id && active.video === video) return;
 
-    if (active) savePosition(active, true, true);
+    if (active) {
+      rememberCurrentVolume(active, true);
+      savePosition(active, true, true);
+      if (active.volumePoll) window.clearInterval(active.volumePoll);
+      if (active.volumeRestoreTimer) window.clearTimeout(active.volumeRestoreTimer);
+    }
 
     const context = {
       id,
@@ -452,21 +508,42 @@
       qualityRestoreStarted: false,
       qualityApplied: false,
       qualityRestoreFinished: false,
-      suppressVolumeEventsUntil: 0
+      suppressVolumeEventsUntil: 0,
+      lastVolumeState: readVolumeState(video),
+      volumeRestoreStarted: false,
+      volumeRestorePending: false,
+      volumeRestoreTimer: null,
+      volumePoll: null
     };
     active = context;
 
     video.addEventListener("loadedmetadata", () => {
       restorePosition(context);
       restorePlayerSettings(context);
+      maybeRestoreVolumeSettings(context);
     });
     video.addEventListener("durationchange", () => {
       restorePosition(context);
       restorePlayerSettings(context);
+      maybeRestoreVolumeSettings(context);
     });
-    video.addEventListener("canplay", () => restorePlayerSettings(context), { once: true });
-    video.addEventListener("timeupdate", () => savePosition(context));
-    video.addEventListener("pause", () => savePosition(context, true));
+    video.addEventListener("canplay", () => {
+      restorePlayerSettings(context);
+      maybeRestoreVolumeSettings(context);
+    });
+    video.addEventListener("playing", () => maybeRestoreVolumeSettings(context));
+    video.addEventListener("volumechange", () => rememberCurrentVolume(context));
+    video.addEventListener("timeupdate", () => {
+      rememberCurrentVolume(context);
+      savePosition(context);
+    });
+    video.addEventListener("pause", () => {
+      rememberCurrentVolume(context);
+      savePosition(context, true);
+    });
+    // A fallback for player controls that update the media element without a
+    // reliably observable DOM event (and for delayed Kick player state changes).
+    context.volumePoll = window.setInterval(() => rememberCurrentVolume(context), 400);
     video.addEventListener("seeking", () => {
       // Seeking back to the beginning means the viewer chose to restart the VOD.
       if (active === context && context.restored && video.currentTime < MIN_POSITION_SECONDS) {
@@ -484,7 +561,12 @@
     const id = getVodId();
 
     if (id !== pageVodId) {
-      if (active) savePosition(active, true, true);
+      if (active) {
+        rememberCurrentVolume(active, true);
+        savePosition(active, true, true);
+        if (active.volumePoll) window.clearInterval(active.volumePoll);
+        if (active.volumeRestoreTimer) window.clearTimeout(active.volumeRestoreTimer);
+      }
       active = null;
       pageVodId = id;
       // Give Kick's SPA player a moment to switch sources after navigation.
@@ -504,11 +586,15 @@
   window.setInterval(scanPage, 1_000);
 
   window.addEventListener("pagehide", () => {
-    if (active) savePosition(active, true, true);
+    if (active) {
+      rememberCurrentVolume(active, true);
+      savePosition(active, true, true);
+    }
   });
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden" && active) {
+      rememberCurrentVolume(active, true);
       savePosition(active, true, true);
     }
   });
