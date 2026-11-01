@@ -1,9 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Kick VOD Resume",
-  "version": "1.0.0",
-  "description": "Remembers your playback position on Kick VODs and resumes when you return.",
+  "version": "1.1.0",
+  "description": "Remembers your playback position on Kick VODs and lets you manage saved progress.",
   "permissions": ["storage"],
+  "action": {
+    "default_title": "Kick VOD Resume",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": [

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kick VOD Resume</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M5 3h6v6h2V5h6v6h-6v2h6v6h-6v-4h-2v6H5V3Z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="heading">
+        <h1>Kick VOD Resume</h1>
+        <p>Your saved playback progress</p>
+      </div>
+      <button id="refreshButton" class="icon-button" type="button" title="Refresh list" aria-label="Refresh list">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </header>
+
+    <section class="toolbar" aria-label="Saved VOD controls">
+      <label class="select-all">
+        <input id="selectAll" type="checkbox">
+        <span>Select all</span>
+      </label>
+      <div class="toolbar-actions">
+        <span id="itemCount" class="item-count">0 videos</span>
+        <button id="deleteSelected" class="delete-button" type="button" disabled>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Delete selected
+        </button>
+      </div>
+    </section>
+
+    <section id="videoList" class="video-list" aria-live="polite"></section>
+
+    <footer class="footer">
+      <span class="privacy-dot" aria-hidden="true"></span>
+      Saved only in this browser
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

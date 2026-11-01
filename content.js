@@ -49,11 +49,18 @@
     // Avoid overwriting an existing resume point during the first few seconds.
     if (time < MIN_POSITION_SECONDS) return;
 
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.search = "";
+    cleanUrl.hash = "";
+
     chrome.storage.local.set({
       [key]: {
+        id: context.id,
         time: Math.floor(time),
         duration: Math.floor(duration),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        title: document.title || "Kick VOD",
+        url: cleanUrl.href
       }
     }).catch(() => {});
   }
