@@ -3,11 +3,14 @@
 
   const STORAGE_PREFIX = "kick-vod-resume:";
   const SETTINGS_PREFIX = "kick-vod-settings:";
+  const VOLUME_PREFIX = "kick-vod-volume:";
   const SAVE_INTERVAL_MS = 5_000;
   const MIN_POSITION_SECONDS = 3;
   const END_BUFFER_SECONDS = 12;
   const QUALITY_RETRY_MS = 300;
   const QUALITY_RETRY_LIMIT = 30;
+  const VOLUME_RESTORE_RETRY_MS = 400;
+  const VOLUME_RESTORE_RETRY_COUNT = 6;
 
   let active = null;
   let pageVodId = null;
@@ -26,6 +29,10 @@
 
   function settingsKey(id) {
     return `${SETTINGS_PREFIX}${id}`;
+  }
+
+  function volumeKey(id) {
+    return `${VOLUME_PREFIX}${id}`;
   }
 
   function removeSavedPosition(id) {
@@ -153,17 +160,30 @@
     };
   }
 
+  function queueVolumeSave(context, state) {
+    if (!context || active !== context || !context.volumeLoaded) return;
+
+    const key = volumeKey(context.id);
+    const snapshot = {
+      volume: Math.min(1, Math.max(0, Number.isFinite(state.volume) ? state.volume : 1)),
+      muted: Boolean(state.muted),
+      updatedAt: Date.now()
+    };
+
+    // Keep volume writes independent from quality writes. This prevents a
+    // rapid sequence of player events from replacing one another's settings.
+    context.volumeWrite = (context.volumeWrite || Promise.resolve())
+      .catch(() => {})
+      .then(() => chrome.storage.local.set({ [key]: snapshot }))
+      .then(() => console.info("[Kick VOD Resume] Volume saved", context.id, snapshot))
+      .catch(error => console.warn("[Kick VOD Resume] Could not save volume:", error));
+  }
+
   function rememberCurrentVolume(context, force = false) {
-    if (!context || active !== context || !context.settingsLoaded) return;
-    // Do not record the temporary default values while Kick is still mounting
-    // its player and the saved preference is being restored.
+    if (!context || active !== context || !context.volumeLoaded) return;
     if (context.volumeRestorePending) return;
 
     const current = readVolumeState(context.video);
-
-    // Assigning video.volume/video.muted raises volumechange too. Ignore those
-    // events briefly after applying a saved value, but keep the observed state
-    // in sync so the polling fallback does not mistake it for a user change.
     if (!force && Date.now() < (context.suppressVolumeEventsUntil || 0)) {
       context.lastVolumeState = current;
       return;
@@ -175,57 +195,100 @@
       previous.muted !== current.muted;
 
     context.lastVolumeState = current;
-    if (!changed) return;
-
-    updateSettings(context, current);
+    if (changed) queueVolumeSave(context, current);
   }
 
-  function applyVolumeSettings(context) {
-    if (!context || active !== context || !context.settingsLoaded) return false;
+  function applyVolumePreference(context) {
+    if (!context || active !== context || !context.volumeLoaded) return false;
 
-    const storedVolume = context.settings.volume;
-    const volume = Number.isFinite(storedVolume)
-      ? Math.min(1, Math.max(0, storedVolume))
-      : 1;
-    const muted = typeof context.settings.muted === "boolean"
-      ? context.settings.muted
-      : false;
+    const preference = context.volumePreference || { volume: 1, muted: false };
+    const volume = Math.min(1, Math.max(0,
+      Number.isFinite(preference.volume) ? preference.volume : 1));
+    const muted = Boolean(preference.muted);
 
     try {
-      // Kick may update the media element as the player finishes mounting.
-      // Applying after metadata/canplay and polling below handles either order.
-      context.suppressVolumeEventsUntil = Date.now() + 350;
+      context.suppressVolumeEventsUntil = Date.now() + 250;
       if (Math.abs(context.video.volume - volume) > 0.001) context.video.volume = volume;
       if (context.video.muted !== muted) context.video.muted = muted;
       context.lastVolumeState = readVolumeState(context.video);
-      updateSettings(context, { volume, muted });
       return true;
-    } catch {
-      // Some media implementations may reject volume changes; playback is unaffected.
+    } catch (error) {
+      console.warn("[Kick VOD Resume] Could not apply volume:", error);
       return false;
     }
   }
 
+  function finishVolumeRestore(context) {
+    if (!context || active !== context) return;
+    for (const timer of context.volumeRestoreTimers || []) window.clearTimeout(timer);
+    context.volumeRestoreTimers = [];
+    context.volumeRestorePending = false;
+    context.lastVolumeState = readVolumeState(context.video);
+    console.info("[Kick VOD Resume] Volume restored", context.id, {
+      preferred: context.volumePreference,
+      actual: context.lastVolumeState
+    });
+
+    // Persist the preference, not a temporary value Kick may have applied
+    // while mounting the player.
+    queueVolumeSave(context, context.volumePreference || { volume: 1, muted: false });
+  }
+
   function maybeRestoreVolumeSettings(context) {
-    if (!context || active !== context || !context.settingsLoaded || context.volumeRestoreStarted) return;
-    // Wait until Kick has a playable media element. Applying too early can be
-    // overwritten by the player's own initialization a moment later.
+    if (!context || active !== context || !context.volumeLoaded || context.volumeRestoreStarted) return;
     if (context.video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
 
     context.volumeRestoreStarted = true;
     context.volumeRestorePending = true;
-    applyVolumeSettings(context);
+    context.volumeRestoreTimers = [];
 
-    // Kick may write its initial player state after canplay. Re-apply once
-    // after that initialization settles, then begin watching for user changes.
-    context.volumeRestoreTimer = window.setTimeout(() => {
-      if (active !== context || getVodId() !== context.id) return;
-      applyVolumeSettings(context);
-      context.lastVolumeState = readVolumeState(context.video);
-      context.volumeRestorePending = false;
-      context.volumeRestoreTimer = null;
-    }, 700);
+    // Kick can initialize its internal player state after the media element
+    // becomes ready. Re-apply a few times during that short initialization
+    // window; after that, normal user changes are saved immediately.
+    const restoreAttempt = attempt => {
+      if (active !== context || getVodId() !== context.id || !context.volumeRestorePending) return;
+      applyVolumePreference(context);
+      if (attempt >= VOLUME_RESTORE_RETRY_COUNT) {
+        finishVolumeRestore(context);
+        return;
+      }
+      const timer = window.setTimeout(
+        () => restoreAttempt(attempt + 1), VOLUME_RESTORE_RETRY_MS
+      );
+      context.volumeRestoreTimers.push(timer);
+    };
+
+    restoreAttempt(0);
   }
+
+  function isVolumeControl(target) {
+    if (!(target instanceof Element)) return false;
+    const control = target.closest('input[type="range"], [role="slider"], button');
+    if (!control) return false;
+
+    const details = [
+      control.getAttribute("aria-label"),
+      control.getAttribute("title"),
+      control.getAttribute("data-testid"),
+      control.getAttribute("name"),
+      typeof control.className === "string" ? control.className : ""
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    return /volume|mute|sound|audio/.test(details);
+  }
+
+  function noteVolumeInteraction(event) {
+    if (!active || !active.volumeRestorePending || !isVolumeControl(event.target)) return;
+
+    // Do not fight the viewer if they adjust the volume while the player is
+    // initializing. End restoration and save the value they choose.
+    finishVolumeRestore(active);
+    rememberCurrentVolume(active, true);
+  }
+
+  document.addEventListener("input", noteVolumeInteraction, true);
+  document.addEventListener("change", noteVolumeInteraction, true);
+  document.addEventListener("pointerdown", noteVolumeInteraction, true);
 
   async function restorePlayerSettings(context) {
     if (context.settingsLoadStarted) {
@@ -235,22 +298,41 @@
     context.settingsLoadStarted = true;
 
     try {
-      const key = settingsKey(context.id);
-      const result = await chrome.storage.local.get(key);
+      const keys = [settingsKey(context.id), volumeKey(context.id)];
+      const result = await chrome.storage.local.get(keys);
       if (active !== context || getVodId() !== context.id) return;
 
-      const saved = result[key];
-      context.settings = saved && typeof saved === "object" ? { ...saved } : {};
+      const oldSettings = result[settingsKey(context.id)];
+      context.settings = oldSettings && typeof oldSettings === "object"
+        ? { ...oldSettings }
+        : {};
       context.settingsLoaded = true;
 
-      // A VOD with no saved preference starts at full volume and unmuted.
+      // v1.2.2 stores volume under its own VOD key. Migrate the volume fields
+      // written by earlier versions when no dedicated volume record exists.
+      const savedVolume = result[volumeKey(context.id)];
+      const legacyVolume = context.settings;
+      const candidate = savedVolume && typeof savedVolume === "object"
+        ? savedVolume
+        : legacyVolume;
+      context.volumePreference = {
+        volume: Number.isFinite(candidate.volume)
+          ? Math.min(1, Math.max(0, candidate.volume))
+          : 1,
+        muted: typeof candidate.muted === "boolean" ? candidate.muted : false
+      };
+      context.volumeLoaded = true;
+      console.info("[Kick VOD Resume] Volume preference loaded", context.id, context.volumePreference);
+
       maybeRestoreVolumeSettings(context);
       startQualityRestore(context);
-    } catch {
-      // Keep playback usable if extension storage is unavailable.
+    } catch (error) {
       if (active !== context) return;
-      context.settings = { volume: 1, muted: false };
+      console.warn("[Kick VOD Resume] Could not load player settings:", error);
+      context.settings = {};
       context.settingsLoaded = true;
+      context.volumePreference = { volume: 1, muted: false };
+      context.volumeLoaded = true;
       maybeRestoreVolumeSettings(context);
       startQualityRestore(context);
     }
@@ -492,7 +574,7 @@
       rememberCurrentVolume(active, true);
       savePosition(active, true, true);
       if (active.volumePoll) window.clearInterval(active.volumePoll);
-      if (active.volumeRestoreTimer) window.clearTimeout(active.volumeRestoreTimer);
+      for (const timer of active.volumeRestoreTimers || []) window.clearTimeout(timer);
     }
 
     const context = {
@@ -512,7 +594,10 @@
       lastVolumeState: readVolumeState(video),
       volumeRestoreStarted: false,
       volumeRestorePending: false,
-      volumeRestoreTimer: null,
+      volumeLoaded: false,
+      volumePreference: { volume: 1, muted: false },
+      volumeWrite: Promise.resolve(),
+      volumeRestoreTimers: [],
       volumePoll: null
     };
     active = context;
@@ -543,7 +628,7 @@
     });
     // A fallback for player controls that update the media element without a
     // reliably observable DOM event (and for delayed Kick player state changes).
-    context.volumePoll = window.setInterval(() => rememberCurrentVolume(context), 400);
+    context.volumePoll = window.setInterval(() => rememberCurrentVolume(context), 300);
     video.addEventListener("seeking", () => {
       // Seeking back to the beginning means the viewer chose to restart the VOD.
       if (active === context && context.restored && video.currentTime < MIN_POSITION_SECONDS) {
@@ -565,7 +650,7 @@
         rememberCurrentVolume(active, true);
         savePosition(active, true, true);
         if (active.volumePoll) window.clearInterval(active.volumePoll);
-        if (active.volumeRestoreTimer) window.clearTimeout(active.volumeRestoreTimer);
+        for (const timer of active.volumeRestoreTimers || []) window.clearTimeout(timer);
       }
       active = null;
       pageVodId = id;

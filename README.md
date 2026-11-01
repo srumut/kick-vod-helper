@@ -14,7 +14,7 @@ A small Chromium extension that remembers where you stopped watching each Kick V
 
 Open a Kick VOD and watch normally. The extension saves your position every few seconds and when you pause, switch tabs, or leave the page. Reload the VOD or return to it later, and it will seek back to your saved position.
 
-It also remembers the volume (including mute state) and quality separately for each VOD. Volume is restored after Kick's player has a playable media element, then applied once more after the player finishes initializing; volume changes are captured through the media element's `volumechange` event and a small polling fallback. A VOD with no saved player preferences starts at 100% volume, unmuted, and the highest quality option Kick makes available. You can change either setting using Kick's normal player controls; the extension remembers your choice for that VOD.
+It also remembers the volume (including mute state) and quality separately for each VOD. Volume and mute state are stored in a dedicated local record for each VOD, separately from quality. They are restored while Kick initializes the player, and changes are captured through the media element's `volumechange` event plus a polling fallback. A VOD with no saved player preferences starts at 100% volume, unmuted, and the highest quality option Kick makes available. You can change either setting using Kick's normal player controls; the extension remembers your choice for that VOD.
 
 Click the extension icon to open the progress manager. It shows each saved VOD, its last saved position, total duration, and approximate completion percentage. Select one or more entries and click **Delete selected** to remove their progress and saved player preferences, or click **Watch** to open that VOD.
 
@@ -30,3 +30,8 @@ The extension uses `chrome.storage.local`. Playback positions and player prefere
 - It does not track live streams or clips.
 - Existing saved progress from earlier versions is still supported.
 - Quality restoration uses Kick's own player settings menu. Kick changing its player implementation could require an update.
+
+
+### Volume storage (v1.2.2)
+
+Volume and mute state are stored in a dedicated `kick-vod-volume:<vod-id>` record, separate from quality preferences. Older volume values are migrated automatically from the v1.2.0/v1.2.1 settings record. The extension reapplies the saved value during the player initialization window and then saves subsequent changes from `volumechange` events plus a polling fallback.

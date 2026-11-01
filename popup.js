@@ -3,6 +3,7 @@
 
   const STORAGE_PREFIX = "kick-vod-resume:";
   const SETTINGS_PREFIX = "kick-vod-settings:";
+  const VOLUME_PREFIX = "kick-vod-volume:";
   const videoList = document.getElementById("videoList");
   const selectAll = document.getElementById("selectAll");
   const deleteSelected = document.getElementById("deleteSelected");
@@ -193,7 +194,8 @@
     if (idsToDelete.length === 0) return;
     const keys = idsToDelete.flatMap(id => [
       `${STORAGE_PREFIX}${id}`,
-      `${SETTINGS_PREFIX}${id}`
+      `${SETTINGS_PREFIX}${id}`,
+      `${VOLUME_PREFIX}${id}`
     ]);
     deleteSelected.disabled = true;
     try {
