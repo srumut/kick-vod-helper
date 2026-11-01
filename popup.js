@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_PREFIX = "kick-vod-resume:";
+  const SETTINGS_PREFIX = "kick-vod-settings:";
   const videoList = document.getElementById("videoList");
   const selectAll = document.getElementById("selectAll");
   const deleteSelected = document.getElementById("deleteSelected");
@@ -190,7 +191,10 @@
   deleteSelected.addEventListener("click", async () => {
     const idsToDelete = [...selected];
     if (idsToDelete.length === 0) return;
-    const keys = idsToDelete.map(id => `${STORAGE_PREFIX}${id}`);
+    const keys = idsToDelete.flatMap(id => [
+      `${STORAGE_PREFIX}${id}`,
+      `${SETTINGS_PREFIX}${id}`
+    ]);
     deleteSelected.disabled = true;
     try {
       await chrome.storage.local.remove(keys);
