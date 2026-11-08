@@ -8,41 +8,119 @@
 </head>
 <body>
   <main class="app">
-    <header class="header">
-      <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M5 3h6v6h2V5h6v6h-6v2h6v6h-6v-4h-2v6H5V3Z" fill="currentColor"/>
-        </svg>
-      </div>
-      <div class="heading">
-        <h1>Kick VOD Resume</h1>
-        <p>Your saved playback progress</p>
-      </div>
-      <button id="refreshButton" class="icon-button" type="button" title="Refresh list" aria-label="Refresh list">
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button id="tab-settings" class="tab" type="button" role="tab" data-tab="settings"
+              aria-controls="panel-settings" aria-selected="true">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 7h9M17 7h3M4 17h3M11 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="15" cy="7" r="2.3" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="9" cy="17" r="2.3" stroke="currentColor" stroke-width="1.8"/>
         </svg>
+        <span>Settings</span>
       </button>
-    </header>
+      <button id="tab-kick-records" class="tab" type="button" role="tab" data-tab="kick-records"
+              aria-controls="panel-kick-records" aria-selected="false" tabindex="-1">
+        <img src="icons/kick.svg" alt="" width="16" height="16">
+        <span>Kick VOD records</span>
+      </button>
+    </nav>
 
-    <section class="toolbar" aria-label="Saved VOD controls">
-      <label class="select-all">
-        <input id="selectAll" type="checkbox">
-        <span>Select all</span>
-      </label>
-      <div class="toolbar-actions">
-        <span id="itemCount" class="item-count">0 videos</span>
-        <button id="deleteSelected" class="delete-button" type="button" disabled>
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Delete selected
-        </button>
-      </div>
+    <!-- Panels start hidden; popup-ui.js shows the one that was open last time. -->
+    <section id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" data-panel="settings" hidden>
+      <section class="setting-group" aria-labelledby="group-x">
+        <header class="group-header">
+          <img class="group-icon" src="icons/x.svg" alt="" width="28" height="28">
+          <h2 id="group-x">X</h2>
+          <span class="group-sub">x.com &middot; twitter.com</span>
+        </header>
+        <div class="setting-card">
+          <label class="setting-row">
+            <span id="name-xMaxQuality" class="setting-name">Max video quality</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="xMaxQuality"
+                     aria-labelledby="name-xMaxQuality" aria-describedby="tip-xMaxQuality">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-xMaxQuality" class="tooltip" role="tooltip">
+              Always plays X videos in the highest quality available instead of letting X
+              auto-switch to lower ones. Uses more data and may buffer on slow connections.
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="setting-group" aria-labelledby="group-kick">
+        <header class="group-header">
+          <img class="group-icon" src="icons/kick.svg" alt="" width="28" height="28">
+          <h2 id="group-kick">Kick</h2>
+          <span class="group-sub">kick.com</span>
+        </header>
+        <div class="setting-card">
+          <label class="setting-row">
+            <span id="name-kickBestQuality" class="setting-name">Best quality for new VODs</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="kickBestQuality"
+                     aria-labelledby="name-kickBestQuality" aria-describedby="tip-kickBestQuality">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-kickBestQuality" class="tooltip" role="tooltip">
+              When you open a VOD you haven't watched before, picks its highest quality
+              automatically. VODs that already have a saved quality keep that choice.
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <p class="settings-hint">Changes apply to the next video you open.</p>
     </section>
 
-    <section id="videoList" class="video-list" aria-live="polite"></section>
+    <section id="panel-kick-records" class="tab-panel" role="tabpanel" aria-labelledby="tab-kick-records" data-panel="kick-records" hidden>
+      <header class="header">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 3h6v6h2V5h6v6h-6v2h6v6h-6v-4h-2v6H5V3Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="heading">
+          <h1>Kick VOD Resume</h1>
+          <p>Your saved playback progress</p>
+        </div>
+        <button id="refreshButton" class="icon-button" type="button" title="Refresh list" aria-label="Refresh list">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <section class="toolbar" aria-label="Saved VOD controls">
+        <label class="select-all">
+          <input id="selectAll" type="checkbox">
+          <span>Select all</span>
+        </label>
+        <div class="toolbar-actions">
+          <span id="itemCount" class="item-count">0 videos</span>
+          <button id="deleteSelected" class="delete-button" type="button" disabled>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Delete selected
+          </button>
+        </div>
+      </section>
+
+      <section id="videoList" class="video-list" aria-live="polite"></section>
+    </section>
 
     <footer class="footer">
       <span class="privacy-dot" aria-hidden="true"></span>
@@ -50,6 +128,8 @@
     </footer>
     <p id="appVersion" class="app-version"></p>
   </main>
+  <script src="shared.js"></script>
   <script src="popup.js"></script>
+  <script src="popup-ui.js"></script>
 </body>
 </html>

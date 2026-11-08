@@ -4,6 +4,7 @@
   const STORAGE_PREFIX = "kick-vod-resume:";
   const SETTINGS_PREFIX = "kick-vod-settings:";
   const VOLUME_PREFIX = "kick-vod-volume:";
+  const { KEYS, normalizeSettings } = globalThis.KickXShared;
   const SAVE_INTERVAL_MS = 5_000;
   const MIN_POSITION_SECONDS = 3;
   const END_BUFFER_SECONDS = 12;
@@ -23,6 +24,9 @@
   // Real user input (isTrusted) during the guard window means a scroll is the viewer's own.
   const USER_INPUT_EVENTS = ["wheel", "touchstart", "touchmove", "keydown", "pointerdown", "mousedown"];
 
+  // Switches from the popup's Settings tab. Read again each time a VOD is bound, and
+  // kept current by the storage listener near the end of this file.
+  let appSettings = normalizeSettings(null);
   let active = null;
   let pageVodId = null;
   let bindNotBefore = 0;
@@ -314,9 +318,11 @@
     context.settingsLoadStarted = true;
 
     try {
-      const keys = [settingsKey(context.id), volumeKey(context.id)];
+      const keys = [settingsKey(context.id), volumeKey(context.id), KEYS.appSettings];
       const result = await chrome.storage.local.get(keys);
       if (active !== context || getVodId() !== context.id) return;
+
+      appSettings = normalizeSettings(result[KEYS.appSettings]);
 
       const oldSettings = result[settingsKey(context.id)];
       context.settings = oldSettings && typeof oldSettings === "object"
@@ -388,7 +394,9 @@
         !isLoginRequiredQuality(item.element));
   }
 
-  function chooseQuality(items, preferredKey) {
+  // allowBest=false: only ever restore a saved preference. If it can't be matched,
+  // return null instead of falling back to the best quality.
+  function chooseQuality(items, preferredKey, allowBest = true) {
     if (!items.length) return null;
 
     const preferred = typeof preferredKey === "string" ? preferredKey.toLowerCase() : "";
@@ -412,7 +420,9 @@
         }
       }
 
-      // If a saved preference is no longer available, fall back to the best option.
+      // If a saved preference is no longer available, fall back to the best option
+      // (unless the "best quality" switch is off, in which case leave the quality alone).
+      if (!allowBest) return null;
     }
 
     const source = items.find(item => item.quality.mode === "source");
@@ -588,6 +598,16 @@
       ? context.settings.quality
       : "";
 
+    // The "best quality for new VODs" switch only covers VODs with no saved quality.
+    // A saved quality is always restored, whatever the switch says. With the switch
+    // off and nothing saved we stop here, without even opening Kick's settings menu.
+    const allowBest = appSettings.kickBestQuality;
+    if (!preferredKey && !allowBest) {
+      console.info("[Kick VOD Resume] Quality: nothing saved and best-quality switch is off, leaving Kick's default", context.id);
+      context.qualityApplied = true;
+      return;
+    }
+
     // If we opened the settings menu, close it unless Kick already did.
     const closeMenuIfLeftOpen = delay => window.setTimeout(() => {
       if (!context.qualityMenuOpen) return;
@@ -601,28 +621,36 @@
 
       const items = getQualityItems();
       if (items.length) {
-        const target = chooseQuality(items, preferredKey);
-        if (target) {
-          // Done is decided before acting, so no later timer or re-bind can ever
-          // select a second time. The quality is picked once, and never re-clicked
-          // to "verify": a menu that updates its checked state late, or not in a
-          // way we recognise, used to trigger a second pick.
+        const target = chooseQuality(items, preferredKey, allowBest);
+        if (!target) {
+          // The saved quality isn't offered for this VOD and the switch is off, so
+          // there is nothing to pick. Close the menu if we opened it and stop.
           context.qualityApplied = true;
           qualityHandled.set(context.video, context.visit);
-
-          const checked = items.find(item => isQualityChecked(item.element));
-          if (checked?.element === target.element) {
-            console.info("[Kick VOD Resume] Quality already set", context.id, target.quality.key);
-            closeMenuIfLeftOpen(0);
-          } else {
-            console.info("[Kick VOD Resume] Quality selecting", context.id, target.quality.key);
-            clickPlayerElement(target.element, context.video);
-            closeMenuIfLeftOpen(MENU_CLOSE_CHECK_MS);
-          }
-          // This also makes the default best quality a remembered preference.
-          updateSettings(context, { quality: target.quality.key });
+          console.info("[Kick VOD Resume] Quality: saved quality unavailable and best-quality switch is off", context.id, preferredKey);
+          closeMenuIfLeftOpen(0);
           return;
         }
+
+        // Done is decided before acting, so no later timer or re-bind can ever
+        // select a second time. The quality is picked once, and never re-clicked
+        // to "verify": a menu that updates its checked state late, or not in a
+        // way we recognise, used to trigger a second pick.
+        context.qualityApplied = true;
+        qualityHandled.set(context.video, context.visit);
+
+        const checked = items.find(item => isQualityChecked(item.element));
+        if (checked?.element === target.element) {
+          console.info("[Kick VOD Resume] Quality already set", context.id, target.quality.key);
+          closeMenuIfLeftOpen(0);
+        } else {
+          console.info("[Kick VOD Resume] Quality selecting", context.id, target.quality.key);
+          clickPlayerElement(target.element, context.video);
+          closeMenuIfLeftOpen(MENU_CLOSE_CHECK_MS);
+        }
+        // This also makes the default best quality a remembered preference.
+        updateSettings(context, { quality: target.quality.key });
+        return;
       } else {
         revealPlayerControls(context.video);
         const button = playerSettingsButton(context.video);
@@ -781,6 +809,14 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushActive();
+  });
+
+  // Keep the switches current when they are changed in the popup while Kick is open.
+  // A change applies to the next VOD that gets opened.
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && changes[KEYS.appSettings]) {
+      appSettings = normalizeSettings(changes[KEYS.appSettings].newValue);
+    }
   });
 
   scanPage();

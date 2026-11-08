@@ -1,6 +1,6 @@
 # Kick VOD Resume
 
-A small Chromium extension that remembers where you stopped watching each Kick VOD and provides a popup to manage saved progress.
+A small Chromium extension that remembers where you stopped watching each Kick VOD and provides a popup to manage saved progress. It also plays videos on X (Twitter) in the highest available quality.
 
 ## Install (Chrome / Chromium / Brave)
 
@@ -10,19 +10,26 @@ A small Chromium extension that remembers where you stopped watching each Kick V
 4. Click **Load unpacked**.
 5. Select the extracted `kick-vod-resume` folder (the folder containing `manifest.json`).
 
+Requires Chrome / Chromium / Brave / Edge 111 or newer (the X feature needs it).
+
 ## Use
 
 Open a Kick VOD and watch normally. The extension saves your position every few seconds and when you pause, switch tabs, or leave the page. Reload the VOD or return to it later, and it will seek back to your saved position.
 
 It also remembers the volume (including mute state) and quality separately for each VOD. Volume and mute state are stored in a dedicated local record for each VOD, separately from quality. They are restored while Kick initializes the player, and changes are captured through the media element's `volumechange` event plus a polling fallback. A VOD with no saved player preferences starts at 100% volume, unmuted, and the highest quality option Kick makes available. You can change either setting using Kick's normal player controls; the extension remembers your choice for that VOD.
 
-Click the extension icon to open the progress manager. It shows each saved VOD, its last saved position, total duration, and approximate completion percentage. Select one or more entries and click **Delete selected** to remove their progress and saved player preferences, or click **Watch** to open that VOD.
+Click the extension icon to open the popup. It has two tabs, and it reopens on whichever tab you used last:
+
+- **Settings**: on/off switches, listed under the app they belong to (X, Kick). Hover a switch to see what it does.
+- **Kick VOD records**: the progress manager described next.
+
+The progress manager shows each saved VOD, its last saved position, total duration, and approximate completion percentage. Select one or more entries and click **Delete selected** to remove their progress and saved player preferences, or click **Watch** to open that VOD.
 
 Progress is stored separately for each VOD. Positions within the final 12 seconds are cleared so a completed VOD does not keep resuming at the end. Player preferences are stored independently so they survive a completed/restarted resume point.
 
 ## Privacy
 
-The extension uses `chrome.storage.local`. Playback positions and player preferences stay in this browser profile and are not sent to Kick or any other server. The extension does not need access to your browsing history or account data.
+The extension uses `chrome.storage.local`. Playback positions, player preferences, your settings and the last-used popup tab stay in this browser profile and are not sent to Kick or any other server. The extension does not need access to your browsing history or account data.
 
 ## Notes
 
@@ -44,3 +51,18 @@ Selecting a quality used to call a plain `focus()` on Kick's menu elements, whic
 
 The console (`[Kick VOD Resume] Quality ...`) logs each selection, so you can verify there is exactly one per VOD load.
 
+### Settings tab and X max video quality (v1.3.0)
+
+The popup has a **Settings** tab with one switch per feature, grouped under each app. Both are on by default, which matches how earlier versions behaved. Changes apply to the next video you open, with no page reload needed.
+
+**X: Max video quality.** X streams video over HLS: the player downloads a playlist of quality levels and switches between them automatically. On x.com / twitter.com the extension rewrites that playlist so only the highest level is offered, so the player can't drop to a lower one. It can only pick the best quality the uploader provided (a 480p upload stays 480p), and it uses more data. To cap the quality instead (say 1080p), change `MAX_HEIGHT` at the top of `x-max-quality.js`. Open the page console to see `[X Max Quality] picked ...` for each video. X can change its player at any time, which could require an update.
+
+**Kick: Best quality for new VODs.** When on, the best available quality is picked for a VOD you have not saved a quality for yet (this is the behaviour from v1.2.x). When off, such VODs are left on Kick's own default, and the extension does not even open the player's settings menu. A quality you have chosen (or that was saved earlier) is restored either way, and if it is not offered for that VOD while the switch is off, the quality is left alone instead of jumping to the best one.
+
+### Files (v1.3.0)
+
+- `shared.js`: setting names and defaults, used by the popup and the content scripts.
+- `popup-ui.js`: tabs and the Settings panel (`popup.js` still handles the records list).
+- `x-max-quality.js`: runs in the page's own context on X and rewrites the video playlist.
+- `x-settings-bridge.js`: passes the on/off switch from extension storage to that page script.
+- `icons/icon-*.png`: the extension icon (Kick and X stacked); `icons/kick-*` and `icons/x-*` are the individual app icons.

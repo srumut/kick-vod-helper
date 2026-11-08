@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- X tile (back, top-right) -->
+  <g transform="translate(51 2) scale(3.1)">
+    <rect width="24" height="24" rx="5" fill="#000000"/>
+    <path transform="translate(12 12) scale(0.57) translate(-12 -12)" fill="#ffffff" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
+  </g>
+  <!-- Kick tile (front, bottom-left); the light ring separates it from the X tile -->
+  <rect x="0" y="54" width="74" height="74" rx="16.5" fill="#f3f4f6"/>
+  <g transform="translate(3 57) scale(2.8333)">
+    <rect width="24" height="24" rx="5" fill="#0b0b0b"/>
+    <path d="M5 3h6v6h2V5h6v6h-6v2h6v6h-6v-4h-2v6H5V3Z" fill="#53FC18"/>
+  </g>
+</svg>
