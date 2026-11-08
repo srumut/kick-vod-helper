@@ -14,10 +14,26 @@
   // One pass runs when the saved volume is loaded; a second may run when the
   // player starts playing, because Kick often finishes initialising then.
   const VOLUME_RESTORE_PASSES = 2;
+  // After one of our own synthetic clicks, undo any page scroll it causes for this long.
+  const SCROLL_GUARD_MS = 800;
+  // Wait this long for the quality menu to appear before clicking the gear again.
+  const MENU_REOPEN_MS = 1_500;
+  // After picking a quality, close the menu ourselves only if Kick left it open.
+  const MENU_CLOSE_CHECK_MS = 500;
+  // Real user input (isTrusted) during the guard window means a scroll is the viewer's own.
+  const USER_INPUT_EVENTS = ["wheel", "touchstart", "touchmove", "keydown", "pointerdown", "mousedown"];
 
   let active = null;
   let pageVodId = null;
   let bindNotBefore = 0;
+  // Bumped every time the VOD id in the URL changes (opening a VOD, leaving it, going
+  // back to it). Kick may reuse the same <video> element but re-initialise its player
+  // on each visit, so "already picked" must only hold within one visit.
+  let routeVisit = 0;
+  // <video> element -> routeVisit in which its quality was already picked. Re-binding
+  // the same element within a visit (Kick re-rendering, the largest-video heuristic
+  // flipping) must not pick the quality a second time.
+  const qualityHandled = new WeakMap();
 
   function getVodId() {
     const path = window.location.pathname;
@@ -465,39 +481,119 @@
     }
   }
 
-  function clickPlayerElement(element) {
-    if (!element) return;
-    element.focus?.();
-    for (const type of ["pointerover", "pointerenter", "pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-      element.dispatchEvent(new PointerEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        pointerId: 1,
-        pointerType: "mouse",
-        isPrimary: true
-      }));
+  // ---------------------------- Scroll protection ----------------------------
+  // A plain element.focus() scrolls that element into view. Our synthetic clicks
+  // focus the settings button and the quality items, and Kick returns focus to the
+  // settings button when the menu closes, so any of these could drag the page down.
+  // We stop it two ways: focus with preventScroll, and (as a safety net) put the
+  // scroll position back if it moved right after one of our own actions.
+
+  function snapshotScroll(nodes) {
+    const entries = [{ root: true, left: window.scrollX, top: window.scrollY }];
+    const seen = new Set();
+    for (let node of nodes) {
+      for (; node instanceof Element; node = node.parentElement) {
+        if (node === document.documentElement || seen.has(node)) continue;
+        seen.add(node);
+        entries.push({ el: node, left: node.scrollLeft, top: node.scrollTop });
+      }
+    }
+    return entries;
+  }
+
+  function restoreScroll(entries) {
+    for (const entry of entries) {
+      const el = entry.root ? window : entry.el;
+      const left = entry.root ? window.scrollX : el.scrollLeft;
+      const top = entry.root ? window.scrollY : el.scrollTop;
+      if (Math.abs(left - entry.left) > 1 || Math.abs(top - entry.top) > 1) {
+        el.scrollTo({ left: entry.left, top: entry.top, behavior: "instant" });
+      }
     }
   }
 
-  function closeQualityMenu() {
-    document.dispatchEvent(new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      composed: true
-    }));
+  function preserveScroll(nodes, action) {
+    const snapshot = snapshotScroll(nodes);
+    let userInput = false;
+    const onUserInput = event => { if (event.isTrusted) userInput = true; };
+    const onScroll = () => { if (!userInput) restoreScroll(snapshot); };
+    const options = { capture: true, passive: true };
+
+    for (const type of USER_INPUT_EVENTS) document.addEventListener(type, onUserInput, options);
+    document.addEventListener("scroll", onScroll, options);
+
+    try {
+      action();
+    } finally {
+      onScroll();
+    }
+
+    // Kick may move focus (and so the page) a moment later, e.g. after a menu
+    // close animation. Keep guarding briefly, then stand down.
+    window.setTimeout(() => {
+      onScroll();
+      for (const type of USER_INPUT_EVENTS) document.removeEventListener(type, onUserInput, options);
+      document.removeEventListener("scroll", onScroll, options);
+    }, SCROLL_GUARD_MS);
+  }
+
+  function clickPlayerElement(element, video) {
+    if (!element) return;
+    preserveScroll([element, video], () => {
+      element.focus?.({ preventScroll: true });
+      for (const type of ["pointerover", "pointerenter", "pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+        element.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true
+        }));
+      }
+    });
+  }
+
+  function closeQualityMenu(video) {
+    preserveScroll([video], () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        composed: true
+      }));
+    });
+  }
+
+  function isQualityChecked(element) {
+    return element.getAttribute("aria-checked") === "true" ||
+      element.getAttribute("data-state") === "checked" ||
+      element.getAttribute("aria-selected") === "true" ||
+      element.checked === true;
   }
 
   function startQualityRestore(context) {
     if (!context || active !== context || context.qualityRestoreStarted) return;
     context.qualityRestoreStarted = true;
 
+    // This exact player already had its quality picked during this visit.
+    if (qualityHandled.get(context.video) === context.visit) {
+      console.info("[Kick VOD Resume] Quality skipped, already picked for this player", context.id);
+      context.qualityApplied = true;
+      return;
+    }
+
     let attempts = 0;
-    let openedByUs = false;
-    let clickCount = 0;
+    let lastMenuClickAt = 0;
     let preferredKey = typeof context.settings.quality === "string"
       ? context.settings.quality
       : "";
+
+    // If we opened the settings menu, close it unless Kick already did.
+    const closeMenuIfLeftOpen = delay => window.setTimeout(() => {
+      if (!context.qualityMenuOpen) return;
+      context.qualityMenuOpen = false;
+      if (getQualityItems().length) closeQualityMenu(context.video);
+    }, delay);
 
     const tick = () => {
       if (active !== context || getVodId() !== context.id || context.qualityApplied) return;
@@ -507,40 +603,41 @@
       if (items.length) {
         const target = chooseQuality(items, preferredKey);
         if (target) {
-          const checked = items.find(item => item.element.getAttribute("aria-checked") === "true");
-          const alreadySelected = checked?.element === target.element;
-
-          if (!alreadySelected && clickCount < 2) {
-            clickPlayerElement(target.element);
-            clickCount += 1;
-            // This also makes the default best quality a remembered preference.
-            updateSettings(context, { quality: target.quality.key });
-            preferredKey = target.quality.key;
-            window.setTimeout(tick, 550);
-            return;
-          }
-
-          updateSettings(context, { quality: target.quality.key });
+          // Done is decided before acting, so no later timer or re-bind can ever
+          // select a second time. The quality is picked once, and never re-clicked
+          // to "verify": a menu that updates its checked state late, or not in a
+          // way we recognise, used to trigger a second pick.
           context.qualityApplied = true;
-          if (openedByUs) closeQualityMenu();
+          qualityHandled.set(context.video, context.visit);
+
+          const checked = items.find(item => isQualityChecked(item.element));
+          if (checked?.element === target.element) {
+            console.info("[Kick VOD Resume] Quality already set", context.id, target.quality.key);
+            closeMenuIfLeftOpen(0);
+          } else {
+            console.info("[Kick VOD Resume] Quality selecting", context.id, target.quality.key);
+            clickPlayerElement(target.element, context.video);
+            closeMenuIfLeftOpen(MENU_CLOSE_CHECK_MS);
+          }
+          // This also makes the default best quality a remembered preference.
+          updateSettings(context, { quality: target.quality.key });
           return;
         }
       } else {
+        revealPlayerControls(context.video);
         const button = playerSettingsButton(context.video);
-        if (button) {
-          revealPlayerControls(context.video);
-          // Open the settings menu once; subsequent attempts wait for its items.
-          if (!openedByUs || attempts % 5 === 0) {
-            clickPlayerElement(button);
-            openedByUs = true;
-          }
-        } else {
-          revealPlayerControls(context.video);
+        // Open the settings menu once, then give it time to render its items
+        // before trying the button again.
+        if (button && Date.now() - lastMenuClickAt >= MENU_REOPEN_MS) {
+          lastMenuClickAt = Date.now();
+          context.qualityMenuOpen = true;
+          clickPlayerElement(button, context.video);
         }
       }
 
       if (attempts >= QUALITY_RETRY_LIMIT) {
-        if (openedByUs) closeQualityMenu();
+        console.info("[Kick VOD Resume] Quality: gave up, no menu items found", context.id);
+        closeMenuIfLeftOpen(0);
         return;
       }
       window.setTimeout(tick, QUALITY_RETRY_MS);
@@ -575,6 +672,10 @@
     flushActive();
     window.clearInterval(active.volumePoll);
     for (const timer of active.volumeRestoreTimers || []) window.clearTimeout(timer);
+    if (active.qualityMenuOpen) {
+      active.qualityMenuOpen = false;
+      closeQualityMenu(active.video);
+    }
   }
 
   function bindVideo(video, id) {
@@ -593,6 +694,8 @@
       settingsWrite: Promise.resolve(),
       qualityRestoreStarted: false,
       qualityApplied: false,
+      qualityMenuOpen: false,
+      visit: routeVisit,
       lastVolumeState: readVolumeState(video),
       volumeRestorePasses: 0,
       volumeRestorePending: false,
@@ -649,6 +752,7 @@
       releaseActive();
       active = null;
       pageVodId = id;
+      routeVisit += 1;
       // Give Kick's SPA player a moment to switch sources after navigation.
       bindNotBefore = Date.now() + 800;
     }

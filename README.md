@@ -35,3 +35,12 @@ The extension uses `chrome.storage.local`. Playback positions and player prefere
 ### Volume storage (v1.2.2)
 
 Volume and mute state are stored in a dedicated `kick-vod-volume:<vod-id>` record, separate from quality preferences. Older volume values are migrated automatically from the v1.2.0/v1.2.1 settings record. The extension reapplies the saved value during the player initialization window and then saves subsequent changes from `volumechange` events plus a polling fallback.
+
+### Quality selection and scrolling (v1.2.4)
+
+The best (or saved) quality is now selected **once** per VOD load. Earlier versions re-clicked the quality item when Kick's menu did not report the new selection quickly or in a way the extension recognised, which showed up as the quality being picked twice. The extension no longer re-clicks to verify, and it never re-picks on the same player element within one visit. Leaving the VOD page and opening a VOD again starts a new visit, so the quality is picked again even if Kick reuses the same player element (v1.2.5; v1.2.4 wrongly skipped this).
+
+Selecting a quality used to call a plain `focus()` on Kick's menu elements, which makes the browser scroll the page to reveal them. Focus is now taken with `preventScroll`, and as a safety net any page scroll caused by the extension's own clicks (including Kick returning focus to the settings button) is undone within the next moment. Scrolling you do yourself is never touched.
+
+The console (`[Kick VOD Resume] Quality ...`) logs each selection, so you can verify there is exactly one per VOD load.
+
