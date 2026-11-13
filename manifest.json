@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Kick VOD Resume",
-  "version": "1.4.0",
-  "description": "Remembers Kick VOD and YouTube playback position, per-VOD volume and quality, with a local progress manager. Also picks the best video quality on Kick live streams, X, YouTube and Twitch.",
+  "version": "1.5.0",
+  "description": "Remembers Kick VOD and YouTube playback position, per-VOD volume and quality, with a local progress manager. Also picks the best video quality on Kick live streams, X, YouTube and Twitch, and can hide chat on Kick, YouTube and Twitch.",
   "minimum_chrome_version": "111",
   "permissions": [
     "storage"
@@ -28,6 +28,17 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://kick.com/*",
+        "https://www.kick.com/*"
+      ],
+      "js": [
+        "shared.js",
+        "chat-hide.js"
+      ],
+      "run_at": "document_start"
     },
     {
       "matches": [
@@ -62,7 +73,8 @@
       "js": [
         "shared.js",
         "settings-bridge.js",
-        "youtube-resume.js"
+        "youtube-resume.js",
+        "chat-hide.js"
       ],
       "run_at": "document_start"
     },
@@ -82,9 +94,21 @@
       ],
       "js": [
         "shared.js",
-        "twitch-quality.js"
+        "twitch-quality.js",
+        "chat-hide.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/live_chat*"
+      ],
+      "js": [
+        "shared.js",
+        "youtube-chat-frame.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "icons": {

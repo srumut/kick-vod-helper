@@ -1,12 +1,18 @@
-// Tabs and the Settings panel. The Kick VOD records panel is handled by popup.js.
+// Tabs and the Settings panel. The saved-progress panels (Kick, YouTube) are handled by popup.js.
 (() => {
   "use strict";
 
-  const { KEYS, TABS, normalizeSettings } = globalThis.KickXShared;
+  const { KEYS, TABS, YOUTUBE_QUALITY_OPTIONS, normalizeSettings } = globalThis.KickXShared;
 
   const tabButtons = [...document.querySelectorAll('[role="tab"]')];
   const panels = [...document.querySelectorAll(".tab-panel")];
-  const switches = [...document.querySelectorAll("input[data-setting]")];
+  // Switches (checkboxes) and dropdowns (selects), each named by its data-setting.
+  const controls = [...document.querySelectorAll("[data-setting]")];
+
+  // Fill the quality dropdown from the shared list, so the choices live in one place.
+  for (const select of document.querySelectorAll('select[data-setting="youtubeMaxHeight"]')) {
+    for (const { value, label } of YOUTUBE_QUALITY_OPTIONS) select.append(new Option(label, String(value)));
+  }
 
   // ------------------------------------------------------------------ Tabs
 
@@ -48,7 +54,11 @@
   // -------------------------------------------------------------- Settings
 
   function showSettings(settings) {
-    for (const input of switches) input.checked = Boolean(settings[input.dataset.setting]);
+    for (const control of controls) {
+      const value = settings[control.dataset.setting];
+      if (control.type === "checkbox") control.checked = Boolean(value);
+      else control.value = String(value);
+    }
   }
 
   // Writes are queued and merge into whatever is stored at that moment, so two quick
@@ -70,8 +80,11 @@
       });
   }
 
-  for (const input of switches) {
-    input.addEventListener("change", () => saveSetting(input.dataset.setting, input.checked));
+  for (const control of controls) {
+    control.addEventListener("change", () => saveSetting(
+      control.dataset.setting,
+      control.type === "checkbox" ? control.checked : Number(control.value)
+    ));
   }
 
   // Open each description below its row, unless it would stick out past the bottom of

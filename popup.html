@@ -20,11 +20,13 @@
       </button>
       <button id="tab-kick-records" class="tab" type="button" role="tab" data-tab="kick-records"
               aria-controls="panel-kick-records" aria-selected="false" tabindex="-1">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.7"/>
-          <path d="m10 9 5 3-5 3V9Z" fill="currentColor"/>
-        </svg>
-        <span>Saved progress</span>
+        <img src="icons/kick.svg" alt="" width="16" height="16">
+        <span>Kick</span>
+      </button>
+      <button id="tab-youtube-records" class="tab" type="button" role="tab" data-tab="youtube-records"
+              aria-controls="panel-youtube-records" aria-selected="false" tabindex="-1">
+        <img src="icons/youtube.svg" alt="" width="16" height="16">
+        <span>YouTube</span>
       </button>
     </nav>
 
@@ -97,6 +99,22 @@
               When you open a channel that is live, picks the highest quality available instead of Kick's default.
             </span>
           </label>
+          <label class="setting-row">
+            <span id="name-kickDisableChat" class="setting-name">Disable chat</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="kickDisableChat"
+                     aria-labelledby="name-kickDisableChat" aria-describedby="tip-kickDisableChat">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-kickDisableChat" class="tooltip" role="tooltip">
+              Hides the chat on live streams and VODs, so the video fills the page and the browser stops drawing messages. That saves CPU and battery. Off by default, so chat shows as normal.
+            </span>
+          </label>
         </div>
       </section>
 
@@ -108,19 +126,16 @@
         </header>
         <div class="setting-card">
           <label class="setting-row">
-            <span id="name-youtubeQuality" class="setting-name">Best quality up to 1080p</span>
+            <span id="name-youtubeMaxHeight" class="setting-name">Best quality up to</span>
             <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
               <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
               <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
             </svg>
-            <span class="switch">
-              <input type="checkbox" role="switch" data-setting="youtubeQuality"
-                     aria-labelledby="name-youtubeQuality" aria-describedby="tip-youtubeQuality">
-              <span class="switch-track" aria-hidden="true"></span>
-            </span>
-            <span id="tip-youtubeQuality" class="tooltip" role="tooltip">
-              Plays videos and live streams in the highest quality up to 1080p instead of letting YouTube auto-switch. Uses more data and may buffer on slow connections.
+            <select class="setting-select" data-setting="youtubeMaxHeight"
+                    aria-labelledby="name-youtubeMaxHeight" aria-describedby="tip-youtubeMaxHeight"></select>
+            <span id="tip-youtubeMaxHeight" class="tooltip" role="tooltip">
+              Plays videos and live streams in the highest quality that doesn't go above the one you pick, instead of letting YouTube auto-switch. If a video tops out lower, you get its best. Off leaves YouTube's automatic quality alone. 1440p and up use a lot of data and may buffer.
             </span>
           </label>
           <label class="setting-row">
@@ -137,6 +152,22 @@
             </span>
             <span id="tip-youtubeResume" class="tooltip" role="tooltip">
               Remembers where you stopped each YouTube video and jumps back there next time. Not used for live streams, Shorts or links that already have a timestamp.
+            </span>
+          </label>
+          <label class="setting-row">
+            <span id="name-youtubeDisableChat" class="setting-name">Disable chat</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="youtubeDisableChat"
+                     aria-labelledby="name-youtubeDisableChat" aria-describedby="tip-youtubeDisableChat">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-youtubeDisableChat" class="tooltip" role="tooltip">
+              Hides the chat on live streams and chat replays, and stops it from loading at all (from the next video you open), so nothing is downloaded or drawn for it. Off by default, so chat shows as normal.
             </span>
           </label>
         </div>
@@ -165,6 +196,22 @@
               Opens Twitch streams and videos in Source quality, the highest the streamer offers, instead of Auto. Uses more data and may buffer on slow connections.
             </span>
           </label>
+          <label class="setting-row">
+            <span id="name-twitchDisableChat" class="setting-name">Disable chat</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="twitchDisableChat"
+                     aria-labelledby="name-twitchDisableChat" aria-describedby="tip-twitchDisableChat">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-twitchDisableChat" class="tooltip" role="tooltip">
+              Hides the chat on live streams and VODs, so the browser stops drawing messages. That saves CPU and battery. Off by default, so chat shows as normal.
+            </span>
+          </label>
         </div>
       </section>
 
@@ -179,10 +226,10 @@
           </svg>
         </div>
         <div class="heading">
-          <h1>Kick VOD Resume</h1>
+          <h1>Kick VODs</h1>
           <p>Your saved playback progress</p>
         </div>
-        <button id="refreshButton" class="icon-button" type="button" title="Refresh list" aria-label="Refresh list">
+        <button class="icon-button" type="button" data-role="refresh" title="Refresh list" aria-label="Refresh list">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -190,14 +237,14 @@
         </button>
       </header>
 
-      <section class="toolbar" aria-label="Saved VOD controls">
+      <section class="toolbar" aria-label="Saved VODs controls">
         <label class="select-all">
-          <input id="selectAll" type="checkbox">
+          <input type="checkbox" data-role="select-all">
           <span>Select all</span>
         </label>
         <div class="toolbar-actions">
-          <span id="itemCount" class="item-count">0 videos</span>
-          <button id="deleteSelected" class="delete-button" type="button" disabled>
+          <span class="item-count" data-role="count">0 VODs</span>
+          <button class="delete-button" type="button" data-role="delete" disabled>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -206,7 +253,46 @@
         </div>
       </section>
 
-      <section id="videoList" class="video-list" aria-live="polite"></section>
+      <section class="video-list" data-role="list" aria-live="polite"></section>
+    </section>
+
+    <section id="panel-youtube-records" class="tab-panel" role="tabpanel" aria-labelledby="tab-youtube-records" data-panel="youtube-records" hidden>
+      <header class="header">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="5" width="20" height="14" rx="4.2" fill="#FF0000"/>
+            <path d="M9.8 8.6v6.8l5.8-3.4Z" fill="#ffffff"/>
+          </svg>
+        </div>
+        <div class="heading">
+          <h1>YouTube videos</h1>
+          <p>Your saved playback progress</p>
+        </div>
+        <button class="icon-button" type="button" data-role="refresh" title="Refresh list" aria-label="Refresh list">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <section class="toolbar" aria-label="Saved videos controls">
+        <label class="select-all">
+          <input type="checkbox" data-role="select-all">
+          <span>Select all</span>
+        </label>
+        <div class="toolbar-actions">
+          <span class="item-count" data-role="count">0 videos</span>
+          <button class="delete-button" type="button" data-role="delete" disabled>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Delete selected
+          </button>
+        </div>
+      </section>
+
+      <section class="video-list" data-role="list" aria-live="polite"></section>
     </section>
 
     <footer class="footer">

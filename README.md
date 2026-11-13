@@ -1,6 +1,6 @@
 # Kick VOD Resume
 
-A small Chromium extension that remembers where you stopped watching each Kick VOD and YouTube video, and provides a popup to manage saved progress. It also picks the highest available video quality on Kick live streams, X (Twitter), YouTube (up to 1080p) and Twitch.
+A small Chromium extension that remembers where you stopped watching each Kick VOD and YouTube video, and provides a popup to manage saved progress. It also picks the highest available video quality on Kick live streams, X (Twitter), YouTube (up to a limit you choose) and Twitch, and can hide the chat on Kick, YouTube and Twitch.
 
 ## Install (Chrome / Chromium / Brave)
 
@@ -18,12 +18,13 @@ Open a Kick VOD and watch normally. The extension saves your position every few 
 
 It also remembers the volume (including mute state) and quality separately for each VOD. Volume and mute state are stored in a dedicated local record for each VOD, separately from quality. They are restored while Kick initializes the player, and changes are captured through the media element's `volumechange` event plus a polling fallback. A VOD with no saved player preferences starts at 100% volume, unmuted, and the highest quality option Kick makes available. You can change either setting using Kick's normal player controls; the extension remembers your choice for that VOD.
 
-Click the extension icon to open the popup. It has two tabs, and it reopens on whichever tab you used last:
+Click the extension icon to open the popup. It has three tabs, and it reopens on whichever tab you used last:
 
-- **Settings**: on/off switches, listed under the app they belong to (X, Kick, YouTube, Twitch). Hover a switch to see what it does.
-- **Saved progress**: the progress manager described next (Kick VODs and YouTube videos).
+- **Settings**: switches and dropdowns, listed under the app they belong to (X, Kick, YouTube, Twitch). Hover one to see what it does.
+- **Kick**: your saved Kick VOD progress.
+- **YouTube**: your saved YouTube progress.
 
-The progress manager shows each saved VOD, its last saved position, total duration, and approximate completion percentage. Select one or more entries and click **Delete selected** to remove their progress and saved player preferences, or click **Watch** to open that VOD.
+Each of the Kick and YouTube tabs shows its saved videos with the last saved position, total duration, and approximate completion percentage. Tick one or more entries (or **Select all**, which only covers the tab you are on) and click **Delete selected** to remove their progress (for Kick VODs, also the saved quality and volume), or click **Watch** to open that video.
 
 Progress is stored separately for each VOD. Positions within the final 12 seconds are cleared so a completed VOD does not keep resuming at the end. Player preferences are stored independently so they survive a completed/restarted resume point.
 
@@ -65,19 +66,35 @@ Four new switches on the Settings tab, all on by default. Like the others, a cha
 
 **Kick: Best quality for live streams.** On a channel page (`kick.com/<channel>`) the highest quality Kick offers is picked once per visit, through the same player menu the VOD feature uses. Nothing is saved for live streams, and the VOD behaviour is unchanged. When off, live streams stay on Kick's default.
 
-**YouTube: Best quality up to 1080p.** For every video and live stream the highest quality that is not above 1080p is picked through the player's own API (`setPlaybackQualityRange`), once per video, after any ad has finished. A quality you pick yourself afterwards is left alone for that video. 1080p Premium is not used. Open the page console to see `[YouTube Quality] <video id>: <level>` for each video. YouTube can change its player at any time, which could require an update.
+**YouTube: Best quality up to 1080p** (since v1.5.0 this is a dropdown with a choice of limit, see above). For every video and live stream the highest quality that is not above 1080p is picked through the player's own API (`setPlaybackQualityRange`), once per video, after any ad has finished. A quality you pick yourself afterwards is left alone for that video. 1080p Premium is not used. Open the page console to see `[YouTube Quality] <video id>: <level>` for each video. YouTube can change its player at any time, which could require an update.
 
-**YouTube: Remember position.** Saves where you stopped on `youtube.com/watch` videos and jumps back there next time, using the same rules as Kick VODs (nothing in the last 12 seconds, nothing in the first 3). It is skipped for live streams, Shorts, ads, and links that already carry a timestamp (`&t=`), and it does not move a video YouTube has already resumed itself. Positions are stored beside the Kick ones (ids start with `yt-`), so they show up in the **Saved progress** tab and can be deleted there.
+**YouTube: Remember position.** Saves where you stopped on `youtube.com/watch` videos and jumps back there next time, using the same rules as Kick VODs (nothing in the last 12 seconds, nothing in the first 3). It is skipped for live streams, Shorts, ads, and links that already carry a timestamp (`&t=`), and it does not move a video YouTube has already resumed itself. Positions are stored beside the Kick ones (ids start with `yt-`), so they show up in the **YouTube** tab and can be deleted there.
 
 **Twitch: Best quality.** Twitch starts its player in the quality saved in `localStorage` (`video-quality`; `chunked` means Source, the highest the streamer offers). The extension writes that before the player starts and again whenever Twitch opens another page. Turning the switch off stops this but does not undo it: Twitch keeps Source until you pick another quality in its player menu. If Twitch ever stops honouring that setting, the switch will have no effect until the extension is updated.
 
-### Files (v1.4.0)
+### Separate Kick and YouTube tabs, quality limit, chat switches (v1.5.0)
 
-- `shared.js`: setting names and defaults, used by the popup and the content scripts.
-- `popup-ui.js`: tabs and the Settings panel (`popup.js` still handles the records list).
+**Saved progress is split in two.** What used to be one **Saved progress** tab is now a **Kick** tab and a **YouTube** tab. Each has its own list, **Select all**, item count and **Delete selected**, so deleting in one never touches the other. Nothing about how records are stored changed (YouTube ids still start with `yt-`), so your existing progress shows up in the right tab.
+
+**YouTube: Best quality up to (replaces the 1080p switch).** A dropdown: **Off**, 144p, 240p, 360p, 480p, 720p, 1080p, 1440p (2K), 2160p (4K), 4320p (8K). Off leaves YouTube's automatic quality alone. Otherwise the highest quality that is not above your limit is picked, once per video, after any ad. A video only offers the levels it was uploaded in, so a limit above what it has just gives its best, and a limit below everything it offers gives its lowest. The default is 1080p, as before, and if you had switched the old 1080p option off it stays off. Note that 8K only exists for videos uploaded in 8K; the player API reports it as `highres`.
+
+**Disable chat (Kick, YouTube, Twitch).** One switch per site, all **off** by default, so chat is shown unless you turn one on. Each applies to both live chat and VOD / replay chat on that site. Hiding and showing chat is immediate, with no reload.
+
+- **Kick** and **Twitch**: the chat container is hidden with CSS (`display: none`), so the browser no longer lays out or paints messages. That is usually the largest cost of a busy chat (many messages a second, emotes, animated emotes). The page's own code still receives messages in the background, so the saving is rendering work, not network or script work. On Kick the video area expands into the freed space.
+- **YouTube**: the chat column is hidden, and the chat itself (an iframe at `youtube.com/live_chat`) is stopped before it loads, so its scripts never run and no messages are downloaded or drawn. This takes effect from the next video you open or the next page load; turning the switch off reloads the chat frame straight away. A chat window you pop out yourself is left alone.
+- **X** is not included: X's live-video chat could not be checked, and a switch that silently did nothing would be worse than none.
+
+The chat selectors live in one list at the top of `chat-hide.js` (`SITES`). These sites rename their elements now and then; if a switch stops hiding the chat, open DevTools on the chat panel and add its selector there. Currently: Twitch `.right-column`, Kick `#channel-chatroom`, YouTube `#chat-container` and `ytd-live-chat-frame#chat`.
+
+### Files (v1.5.0)
+
+- `shared.js`: setting names, defaults, the YouTube quality choices and the tab names, used by the popup and the content scripts.
+- `popup-ui.js`: tabs and the Settings panel (`popup.js` handles the Kick and YouTube record lists).
 - `x-max-quality.js`: runs in the page's own context on X and rewrites the video playlist.
-- `youtube-quality.js`: runs in the page's own context on YouTube and sets the quality through the player API.
-- `settings-bridge.js`: passes the on/off switches from extension storage to those two page scripts (as `data-*` attributes on `<html>`).
+- `youtube-quality.js`: runs in the page's own context on YouTube and sets the quality, up to your limit, through the player API.
+- `chat-hide.js`: hides the chat on Twitch, Kick and YouTube when that site's **Disable chat** switch is on (selectors in `SITES` at the top).
+- `youtube-chat-frame.js`: runs inside YouTube's embedded chat frame and stops it from loading when **Disable chat** is on.
+- `settings-bridge.js`: passes the settings from extension storage to those two page scripts (as `data-*` attributes on `<html>`).
 - `youtube-resume.js`: saves and restores the position of YouTube videos.
 - `twitch-quality.js`: sets Twitch's saved quality to Source.
 - `icons/icon-*.png`: the extension icon (Kick, X, YouTube and Twitch in a 2x2 grid; `icons/icon.svg` is the source); `icons/kick-*`, `icons/x-*`, `icons/youtube-*` and `icons/twitch-*` are the individual app icons.

@@ -1,6 +1,7 @@
 // Remembers where you stopped on each YouTube video and jumps back there next time.
-// Positions go in the same store as the Kick VOD records (their ids start with "yt-"),
-// so the popup lists and deletes them together. Live streams, Shorts and ads are skipped.
+// Positions go in the same store as the Kick VOD records (their ids start with "yt-"); the
+// popup tells them apart by that prefix and lists them in the YouTube tab. Live streams,
+// Shorts and ads are skipped.
 (() => {
   "use strict";
 
