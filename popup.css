@@ -254,6 +254,8 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 .setting-row:hover { background: #1c1e23; }
+.setting-row + .setting-row { border-top: 1px solid #292c32; border-top-left-radius: 0; border-top-right-radius: 0; }
+.setting-row:has(+ .setting-row) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .setting-name { color: #f1f2f4; font-size: 12px; font-weight: 600; line-height: 1.3; }
 .info-icon { flex: none; width: 14px; height: 14px; color: #666b76; }
 .setting-row:hover .info-icon { color: #a2a7b2; }

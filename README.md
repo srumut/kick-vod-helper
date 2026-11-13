@@ -1,6 +1,6 @@
 # Kick VOD Resume
 
-A small Chromium extension that remembers where you stopped watching each Kick VOD and provides a popup to manage saved progress. It also plays videos on X (Twitter) in the highest available quality.
+A small Chromium extension that remembers where you stopped watching each Kick VOD and YouTube video, and provides a popup to manage saved progress. It also picks the highest available video quality on Kick live streams, X (Twitter), YouTube (up to 1080p) and Twitch.
 
 ## Install (Chrome / Chromium / Brave)
 
@@ -20,8 +20,8 @@ It also remembers the volume (including mute state) and quality separately for e
 
 Click the extension icon to open the popup. It has two tabs, and it reopens on whichever tab you used last:
 
-- **Settings**: on/off switches, listed under the app they belong to (X, Kick). Hover a switch to see what it does.
-- **Kick VOD records**: the progress manager described next.
+- **Settings**: on/off switches, listed under the app they belong to (X, Kick, YouTube, Twitch). Hover a switch to see what it does.
+- **Saved progress**: the progress manager described next (Kick VODs and YouTube videos).
 
 The progress manager shows each saved VOD, its last saved position, total duration, and approximate completion percentage. Select one or more entries and click **Delete selected** to remove their progress and saved player preferences, or click **Watch** to open that VOD.
 
@@ -29,12 +29,12 @@ Progress is stored separately for each VOD. Positions within the final 12 second
 
 ## Privacy
 
-The extension uses `chrome.storage.local`. Playback positions, player preferences, your settings and the last-used popup tab stay in this browser profile and are not sent to Kick or any other server. The extension does not need access to your browsing history or account data.
+The extension uses `chrome.storage.local`. Playback positions, player preferences, your settings and the last-used popup tab stay in this browser profile and are not sent to Kick, YouTube or any other server. The extension does not need access to your browsing history or account data.
 
 ## Notes
 
 - Supports Kick VOD URLs such as `https://kick.com/channel/videos/<video-id>` and `/video/<video-id>`.
-- It does not track live streams or clips.
+- It does not track live streams (Kick or YouTube) or clips.
 - Existing saved progress from earlier versions is still supported.
 - Quality restoration uses Kick's own player settings menu. Kick changing its player implementation could require an update.
 
@@ -59,10 +59,25 @@ The popup has a **Settings** tab with one switch per feature, grouped under each
 
 **Kick: Best quality for new VODs.** When on, the best available quality is picked for a VOD you have not saved a quality for yet (this is the behaviour from v1.2.x). When off, such VODs are left on Kick's own default, and the extension does not even open the player's settings menu. A quality you have chosen (or that was saved earlier) is restored either way, and if it is not offered for that VOD while the switch is off, the quality is left alone instead of jumping to the best one.
 
-### Files (v1.3.0)
+### Live streams, YouTube and Twitch (v1.4.0)
+
+Four new switches on the Settings tab, all on by default. Like the others, a change applies to the next video you open, with no page reload.
+
+**Kick: Best quality for live streams.** On a channel page (`kick.com/<channel>`) the highest quality Kick offers is picked once per visit, through the same player menu the VOD feature uses. Nothing is saved for live streams, and the VOD behaviour is unchanged. When off, live streams stay on Kick's default.
+
+**YouTube: Best quality up to 1080p.** For every video and live stream the highest quality that is not above 1080p is picked through the player's own API (`setPlaybackQualityRange`), once per video, after any ad has finished. A quality you pick yourself afterwards is left alone for that video. 1080p Premium is not used. Open the page console to see `[YouTube Quality] <video id>: <level>` for each video. YouTube can change its player at any time, which could require an update.
+
+**YouTube: Remember position.** Saves where you stopped on `youtube.com/watch` videos and jumps back there next time, using the same rules as Kick VODs (nothing in the last 12 seconds, nothing in the first 3). It is skipped for live streams, Shorts, ads, and links that already carry a timestamp (`&t=`), and it does not move a video YouTube has already resumed itself. Positions are stored beside the Kick ones (ids start with `yt-`), so they show up in the **Saved progress** tab and can be deleted there.
+
+**Twitch: Best quality.** Twitch starts its player in the quality saved in `localStorage` (`video-quality`; `chunked` means Source, the highest the streamer offers). The extension writes that before the player starts and again whenever Twitch opens another page. Turning the switch off stops this but does not undo it: Twitch keeps Source until you pick another quality in its player menu. If Twitch ever stops honouring that setting, the switch will have no effect until the extension is updated.
+
+### Files (v1.4.0)
 
 - `shared.js`: setting names and defaults, used by the popup and the content scripts.
 - `popup-ui.js`: tabs and the Settings panel (`popup.js` still handles the records list).
 - `x-max-quality.js`: runs in the page's own context on X and rewrites the video playlist.
-- `x-settings-bridge.js`: passes the on/off switch from extension storage to that page script.
-- `icons/icon-*.png`: the extension icon (Kick and X stacked); `icons/kick-*` and `icons/x-*` are the individual app icons.
+- `youtube-quality.js`: runs in the page's own context on YouTube and sets the quality through the player API.
+- `settings-bridge.js`: passes the on/off switches from extension storage to those two page scripts (as `data-*` attributes on `<html>`).
+- `youtube-resume.js`: saves and restores the position of YouTube videos.
+- `twitch-quality.js`: sets Twitch's saved quality to Source.
+- `icons/icon-*.png`: the extension icon (Kick, X, YouTube and Twitch in a 2x2 grid; `icons/icon.svg` is the source); `icons/kick-*`, `icons/x-*`, `icons/youtube-*` and `icons/twitch-*` are the individual app icons.

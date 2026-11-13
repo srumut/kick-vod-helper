@@ -1,13 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- X tile (back, top-right) -->
-  <g transform="translate(51 2) scale(3.1)">
-    <rect width="24" height="24" rx="5" fill="#000000"/>
-    <path transform="translate(12 12) scale(0.57) translate(-12 -12)" fill="#ffffff" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
-  </g>
-  <!-- Kick tile (front, bottom-left); the light ring separates it from the X tile -->
-  <rect x="0" y="54" width="74" height="74" rx="16.5" fill="#f3f4f6"/>
-  <g transform="translate(3 57) scale(2.8333)">
+  <!-- kick -->
+  <g transform="translate(0 0) scale(2.5)">
     <rect width="24" height="24" rx="5" fill="#0b0b0b"/>
-    <path d="M5 3h6v6h2V5h6v6h-6v2h6v6h-6v-4h-2v6H5V3Z" fill="#53FC18"/>
+    <path fill="#53FC18" d="M5 3h6v6h2V5h6v6h-6v2h6v6h-6v-4h-2v6H5V3Z"/>
+  </g>
+  <!-- x -->
+  <g transform="translate(68 0) scale(2.5)">
+    <rect width="24" height="24" rx="5" fill="#000000"/>
+    <path transform="translate(12 12) scale(0.58) translate(-12 -12)" fill="#ffffff" fill-rule="evenodd" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
+  </g>
+  <!-- youtube -->
+  <g transform="translate(0 68) scale(2.5)">
+    <rect width="24" height="24" rx="5" fill="#0b0b0b"/>
+    <rect x="2" y="5" width="20" height="14" rx="4.2" fill="#FF0000"/>
+    <path fill="#ffffff" d="M9.8 8.6v6.8l5.8-3.4Z"/>
+  </g>
+  <!-- twitch -->
+  <g transform="translate(68 68) scale(2.5)">
+    <rect width="24" height="24" rx="5" fill="#0b0b0b"/>
+    <path transform="translate(12 12) scale(0.68) translate(-12 -12)" fill="#9146FF" fill-rule="evenodd" d="M11.571 4.714h1.715v5.143h-1.715zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 14.571V0zm14.571 13.714l-3.428 3.429h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
   </g>
 </svg>

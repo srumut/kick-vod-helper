@@ -9,7 +9,7 @@
  * This runs in the page's own JS context (world: "MAIN") so it can wrap fetch()
  * and XMLHttpRequest before X's code uses them. Because the MAIN world has no
  * access to chrome.storage, the on/off setting is handed over by
- * x-settings-bridge.js as an attribute on <html>.
+ * settings-bridge.js as an attribute on <html>.
  */
 (() => {
   'use strict';
@@ -18,7 +18,7 @@
   // Highest video height to allow. Infinity = always the best available.
   // Set to e.g. 1080 or 720 if you want to cap it.
   const MAX_HEIGHT = Infinity;
-  // Written by x-settings-bridge.js: "on" or "off".
+  // Written by settings-bridge.js: "on" or "off".
   const SETTING_ATTR = 'data-x-max-quality';
   // -------------------------------------------------------------------------
 

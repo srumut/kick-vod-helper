@@ -4,6 +4,7 @@
   const STORAGE_PREFIX = "kick-vod-resume:";
   const SETTINGS_PREFIX = "kick-vod-settings:";
   const VOLUME_PREFIX = "kick-vod-volume:";
+  const LIVE_PREFIX = "live:";
   const { KEYS, normalizeSettings } = globalThis.KickXShared;
   const SAVE_INTERVAL_MS = 5_000;
   const MIN_POSITION_SECONDS = 3;
@@ -28,9 +29,10 @@
   // kept current by the storage listener near the end of this file.
   let appSettings = normalizeSettings(null);
   let active = null;
-  let pageVodId = null;
+  // What the page is playing: a VOD id, "live:<channel>" on a channel page, or null.
+  let pageKey = null;
   let bindNotBefore = 0;
-  // Bumped every time the VOD id in the URL changes (opening a VOD, leaving it, going
+  // Bumped every time the page key in the URL changes (opening a VOD, leaving it, going
   // back to it). Kick may reuse the same <video> element but re-initialise its player
   // on each visit, so "already picked" must only hold within one visit.
   let routeVisit = 0;
@@ -44,6 +46,19 @@
     const channelVod = path.match(/^\/[^/]+\/videos\/([0-9a-f-]{36})\/?$/i);
     const shortVod = path.match(/^\/video\/([0-9a-f-]{36})\/?$/i);
     return (channelVod?.[1] ?? shortVod?.[1] ?? null)?.toLowerCase() ?? null;
+  }
+
+  // First path segments on kick.com that are pages rather than channels.
+  const NOT_CHANNELS = new Set(["browse", "categories", "category", "following", "search", "clips"]);
+
+  // kick.com/<channel> is where a channel's live stream plays.
+  function getLiveKey() {
+    const channel = window.location.pathname.match(/^\/([^/]+)\/?$/)?.[1]?.toLowerCase();
+    return channel && !NOT_CHANNELS.has(channel) ? `${LIVE_PREFIX}${channel}` : null;
+  }
+
+  function getPageKey() {
+    return getVodId() ?? getLiveKey();
   }
 
   function storageKey(id) {
@@ -601,7 +616,8 @@
     // The "best quality for new VODs" switch only covers VODs with no saved quality.
     // A saved quality is always restored, whatever the switch says. With the switch
     // off and nothing saved we stop here, without even opening Kick's settings menu.
-    const allowBest = appSettings.kickBestQuality;
+    // A live stream has no saved quality, so only its own switch decides.
+    const allowBest = context.live ? appSettings.kickLiveQuality : appSettings.kickBestQuality;
     if (!preferredKey && !allowBest) {
       console.info("[Kick VOD Resume] Quality: nothing saved and best-quality switch is off, leaving Kick's default", context.id);
       context.qualityApplied = true;
@@ -616,7 +632,7 @@
     }, delay);
 
     const tick = () => {
-      if (active !== context || getVodId() !== context.id || context.qualityApplied) return;
+      if (active !== context || getPageKey() !== context.id || context.qualityApplied) return;
       attempts += 1;
 
       const items = getQualityItems();
@@ -648,7 +664,8 @@
           clickPlayerElement(target.element, context.video);
           closeMenuIfLeftOpen(MENU_CLOSE_CHECK_MS);
         }
-        // This also makes the default best quality a remembered preference.
+        // This also makes the default best quality a remembered preference (a live
+        // stream has no settings record, so nothing is saved for it).
         updateSettings(context, { quality: target.quality.key });
         return;
       } else {
@@ -690,7 +707,7 @@
 
   // Save whatever the active VOD has not saved yet (used when leaving it or the page).
   function flushActive() {
-    if (!active) return;
+    if (!active || active.live) return;
     rememberCurrentVolume(active, true);
     savePosition(active, true, true);
   }
@@ -773,13 +790,39 @@
     }
   }
 
-  function scanPage() {
-    const id = getVodId();
+  // A live channel page: only the quality is handled, nothing is saved.
+  async function bindLive(video, key) {
+    if (active?.id === key && active.video === video) return;
+    releaseActive();
 
-    if (id !== pageVodId) {
+    const context = {
+      id: key,
+      video,
+      live: true,
+      settings: {},
+      visit: routeVisit,
+      qualityRestoreStarted: false,
+      qualityApplied: false,
+      qualityMenuOpen: false
+    };
+    active = context;
+
+    try {
+      const result = await chrome.storage.local.get(KEYS.appSettings);
+      appSettings = normalizeSettings(result[KEYS.appSettings]);
+    } catch {
+      // Keep the switches as they were.
+    }
+    startQualityRestore(context);
+  }
+
+  function scanPage() {
+    const id = getPageKey();
+
+    if (id !== pageKey) {
       releaseActive();
       active = null;
-      pageVodId = id;
+      pageKey = id;
       routeVisit += 1;
       // Give Kick's SPA player a moment to switch sources after navigation.
       bindNotBefore = Date.now() + 800;
@@ -788,7 +831,9 @@
     if (!id || Date.now() < bindNotBefore) return;
 
     const video = findMainVideo();
-    if (video) bindVideo(video, id);
+    if (!video) return;
+    if (id.startsWith(LIVE_PREFIX)) bindLive(video, id);
+    else bindVideo(video, id);
   }
 
   // Chat and other page churn produce constant DOM mutations. Only a <video>
@@ -798,7 +843,7 @@
     node instanceof Element && (node.tagName === "VIDEO" || node.querySelector("video") !== null)
   );
   const observer = new MutationObserver(mutations => {
-    if (getVodId() !== pageVodId || mutations.some(touchesVideo)) scanPage();
+    if (getPageKey() !== pageKey || mutations.some(touchesVideo)) scanPage();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 

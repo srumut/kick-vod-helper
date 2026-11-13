@@ -20,8 +20,11 @@
       </button>
       <button id="tab-kick-records" class="tab" type="button" role="tab" data-tab="kick-records"
               aria-controls="panel-kick-records" aria-selected="false" tabindex="-1">
-        <img src="icons/kick.svg" alt="" width="16" height="16">
-        <span>Kick VOD records</span>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.7"/>
+          <path d="m10 9 5 3-5 3V9Z" fill="currentColor"/>
+        </svg>
+        <span>Saved progress</span>
       </button>
     </nav>
 
@@ -76,6 +79,90 @@
             <span id="tip-kickBestQuality" class="tooltip" role="tooltip">
               When you open a VOD you haven't watched before, picks its highest quality
               automatically. VODs that already have a saved quality keep that choice.
+            </span>
+          </label>
+          <label class="setting-row">
+            <span id="name-kickLiveQuality" class="setting-name">Best quality for live streams</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="kickLiveQuality"
+                     aria-labelledby="name-kickLiveQuality" aria-describedby="tip-kickLiveQuality">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-kickLiveQuality" class="tooltip" role="tooltip">
+              When you open a channel that is live, picks the highest quality available instead of Kick's default.
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="setting-group" aria-labelledby="group-youtube">
+        <header class="group-header">
+          <img class="group-icon" src="icons/youtube.svg" alt="" width="28" height="28">
+          <h2 id="group-youtube">YouTube</h2>
+          <span class="group-sub">youtube.com</span>
+        </header>
+        <div class="setting-card">
+          <label class="setting-row">
+            <span id="name-youtubeQuality" class="setting-name">Best quality up to 1080p</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="youtubeQuality"
+                     aria-labelledby="name-youtubeQuality" aria-describedby="tip-youtubeQuality">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-youtubeQuality" class="tooltip" role="tooltip">
+              Plays videos and live streams in the highest quality up to 1080p instead of letting YouTube auto-switch. Uses more data and may buffer on slow connections.
+            </span>
+          </label>
+          <label class="setting-row">
+            <span id="name-youtubeResume" class="setting-name">Remember position</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="youtubeResume"
+                     aria-labelledby="name-youtubeResume" aria-describedby="tip-youtubeResume">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-youtubeResume" class="tooltip" role="tooltip">
+              Remembers where you stopped each YouTube video and jumps back there next time. Not used for live streams, Shorts or links that already have a timestamp.
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="setting-group" aria-labelledby="group-twitch">
+        <header class="group-header">
+          <img class="group-icon" src="icons/twitch.svg" alt="" width="28" height="28">
+          <h2 id="group-twitch">Twitch</h2>
+          <span class="group-sub">twitch.tv</span>
+        </header>
+        <div class="setting-card">
+          <label class="setting-row">
+            <span id="name-twitchQuality" class="setting-name">Best quality</span>
+            <svg class="info-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+            <span class="switch">
+              <input type="checkbox" role="switch" data-setting="twitchQuality"
+                     aria-labelledby="name-twitchQuality" aria-describedby="tip-twitchQuality">
+              <span class="switch-track" aria-hidden="true"></span>
+            </span>
+            <span id="tip-twitchQuality" class="tooltip" role="tooltip">
+              Opens Twitch streams and videos in Source quality, the highest the streamer offers, instead of Auto. Uses more data and may buffer on slow connections.
             </span>
           </label>
         </div>

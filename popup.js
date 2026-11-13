@@ -28,10 +28,11 @@
   }
 
   function getVideoUrl(id, saved) {
-    // Only open Kick URLs. Older entries may not have a saved URL yet.
+    // Only open Kick and YouTube URLs. Older entries may not have a saved URL yet.
     try {
       const url = new URL(saved.url || `https://kick.com/video/${id}`);
-      if (url.protocol === "https:" && (url.hostname === "kick.com" || url.hostname === "www.kick.com")) {
+      if (url.protocol === "https:" &&
+          ["kick.com", "www.kick.com", "www.youtube.com"].includes(url.hostname)) {
         return url.href;
       }
     } catch {
@@ -148,7 +149,7 @@
     const heading = document.createElement("strong");
     heading.textContent = "No saved progress yet";
     const description = document.createElement("span");
-    description.textContent = "Watch a Kick VOD and your playback position will appear here.";
+    description.textContent = "Watch a Kick VOD or a YouTube video and your playback position will appear here.";
     empty.append(icon, heading, description);
     videoList.replaceChildren(empty);
   }

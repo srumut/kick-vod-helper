@@ -1,11 +1,13 @@
 // Constants shared by the popup and the content scripts, so the setting names and
-// defaults live in exactly one place. Loaded before popup-ui.js, content.js and
-// x-settings-bridge.js; it exposes a single global, KickXShared.
+// defaults live in exactly one place. Loaded before popup-ui.js, content.js,
+// settings-bridge.js, youtube-resume.js and twitch-quality.js; it exposes a single
+// global, KickXShared.
 (() => {
   "use strict";
 
   const KEYS = Object.freeze({
-    // { xMaxQuality: boolean, kickBestQuality: boolean }
+    // { xMaxQuality, kickBestQuality, kickLiveQuality, youtubeQuality, youtubeResume,
+    //   twitchQuality }, all booleans
     appSettings: "app-settings",
     // { activeTab: "settings" | "kick-records" }, so the popup reopens on the last tab.
     popupState: "popup-state"
@@ -15,7 +17,11 @@
   // the settings tab existed.
   const DEFAULT_SETTINGS = Object.freeze({
     xMaxQuality: true,
-    kickBestQuality: true
+    kickBestQuality: true,
+    kickLiveQuality: true,
+    youtubeQuality: true,
+    youtubeResume: true,
+    twitchQuality: true
   });
 
   const TABS = Object.freeze(["settings", "kick-records"]);
